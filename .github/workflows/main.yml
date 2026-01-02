@@ -1,54 +1,133 @@
-name: Run Discord Bot
+name: Discord Bot
 
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
   schedule:
-    - cron: '*/5 * * * *'  # 5分おきに実行
+    - cron: '*/5 * * * *'  # 5分ごとにチェック
 
 jobs:
-  health-check:
+  run-bot:
     runs-on: ubuntu-latest
+    concurrency: 
+      group: bot-${{ github.ref }}
+      cancel-in-progress: true
+    
     steps:
-      - uses: actions/checkout@v3
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Check if bot is running
+      id: check_bot
+      env:
+        DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+      run: |
+        # 既存の実行中のワークフローをチェック
+        RUNNING_JOBS=$(curl -s -H "Authorization: token ${{ github.token }}" \
+          "https://api.github.com/repos/${{ github.repository }}/actions/runs?status=in_progress" | \
+          jq -r --arg run_id "${{ github.run_id }}" \
+          '.workflow_runs[] | select(.id | tostring != $run_id) | .id' | head -n 1)
+        
+        if [ -z "$RUNNING_JOBS" ]; then
+          echo "ボットが実行されていないため、起動します"
+          echo "RUN_BOT=true" >> $GITHUB_ENV
+        else
+          echo "ボットは既に実行中です"
+          echo "RUN_BOT=false" >> $GITHUB_ENV
+        fi
+    
+    - name: Run bot
+      if: env.RUN_BOT == 'true'
+      env:
+        DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+        ALLOWED_CHANNEL_IDS: ${{ secrets.ALLOWED_CHANNEL_IDS }}
+      run: |
+        # 必要なツールをインストール
+        sudo apt-get update
+        sudo apt-get install -y jq curl
+        
+        # ボットの状態をチェックする関数
+        check_bot_health() {
+          local channel_id=$(echo $ALLOWED_CHANNEL_IDS | cut -d',' -f1)
+          local response=$(curl -s -H "Authorization: Bot $DISCORD_TOKEN" \
+            "https://discord.com/api/v9/channels/$channel_id/messages?limit=1")
           
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          # レスポンスを確認
+          if echo "$response" | jq -e '.message' | grep -q "401"; then
+            echo "認証エラー: トークンが無効です"
+            return 1
+          elif echo "$response" | jq -e '.message' | grep -q "404"; then
+            echo "チャンネルが見つかりません: $channel_id"
+            return 1
+          elif echo "$response" | jq -e '.message' | grep -q "rate limited"; then
+            echo "レートリミットに達しました"
+            return 1
+          fi
           
-      - name: Run health check
-        env:
-          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
-          ALLOWED_CHANNEL_ID: ${{ secrets.ALLOWED_CHANNEL_ID }}
-        run: |
-          python -c "
-          import os
-          import discord
-          from discord.ext import commands
+          return 0
+        }
+        
+        # ボットを起動
+        start_bot() {
+          echo "ボットを起動しています..."
+          nohup python bot.py > bot.log 2>&1 &
+          echo $! > bot.pid
+          sleep 10  # 起動待ち
           
-          intents = discord.Intents.default()
-          intents.messages = True
+          # 起動ログを確認
+          if ! grep -q "ログインしました" bot.log; then
+            echo "ボットの起動に失敗しました"
+            cat bot.log
+            return 1
+          fi
           
-          class Bot(commands.Bot):
-              def __init__(self):
-                  super().__init__(command_prefix='!', intents=intents)
-                  self.allowed_channel_id = int(os.getenv('ALLOWED_CHANNEL_ID'))
-              
-              async def on_ready(self):
-                  try:
-                      channel = self.get_channel(self.allowed_channel_id)
-                      if channel:
-                          await channel.send('🔄 ヘルスチェック: ボットは正常に動作しています')
-                      print('ヘルスチェック: 正常')
-                  except Exception as e:
-                      print(f'ヘルスチェックエラー: {e}')
-                  await self.close()
+          echo "ボットが正常に起動しました (PID: $(cat bot.pid))"
+          return 0
+        }
+        
+        # ボットの状態を確認
+        if ! check_bot_health; then
+          echo "ボットが応答しないため、再起動します"
+          pkill -f "python.*bot.py" || true
+          if ! start_bot; then
+            echo "ボットの起動に失敗しました"
+            exit 1
+          fi
+        else
+          echo "ボットは正常に動作しています"
+        fi
+        
+        # ヘルスチェックループ
+        while true; do
+          sleep 300  # 5分待機
           
-          bot = Bot()
-          bot.run(os.getenv('DISCORD_TOKEN'))
-          "
+          if ! check_bot_health; then
+            echo "ボットが応答しないため、再起動します"
+            pkill -f "python.*bot.py" || true
+            if ! start_bot; then
+              echo "ボットの再起動に失敗しました"
+              exit 1
+            fi
+          else
+            echo "$(date): ボットは正常に動作しています"
+          fi
+        done
+
+    - name: Show logs
+      if: always()
+      run: |
+        if [ -f bot.log ]; then
+          echo "=== 最終ログ（最新50行）==="
+          tail -n 50 bot.log
+          echo "========================="
+        fi
