@@ -141,7 +141,7 @@ async def custom_help(ctx):
         color=discord.Color.blue()
     )
     
-    # スラッシュコマンドの説明
+    # コマンドの説明
     embed.add_field(
         name='📝 投稿関連',
         value='''
@@ -163,7 +163,14 @@ async def custom_help(ctx):
         )
     
     embed.set_footer(text='各コマンドの詳細は /help コマンド名 で確認できます。')
-    await ctx.send(embed=embed)
+    
+    # エフェメラルメッセージとして送信（実行者のみに表示）
+    if isinstance(ctx, commands.Context):
+        # プレフィックスコマンドの場合
+        await ctx.send(embed=embed, ephemeral=True)
+    else:
+        # スラッシュコマンドの場合
+        await ctx.response.send_message(embed=embed, ephemeral=True)
 
 # ボットを実行
 async def main():
