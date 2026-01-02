@@ -164,13 +164,22 @@ async def custom_help(ctx):
     
     embed.set_footer(text='各コマンドの詳細は /help コマンド名 で確認できます。')
     
-    # エフェメラルメッセージとして送信（実行者のみに表示）
-    if isinstance(ctx, commands.Context):
-        # プレフィックスコマンドの場合
-        await ctx.send(embed=embed, ephemeral=True)
-    else:
+    try:
         # スラッシュコマンドの場合
-        await ctx.response.send_message(embed=embed, ephemeral=True)
+        if hasattr(ctx, 'response'):
+            await ctx.response.send_message(embed=embed, ephemeral=True)
+        # プレフィックスコマンドの場合
+        elif hasattr(ctx, 'send'):
+            await ctx.send(embed=embed, ephemeral=True)
+        # その他の場合（念のため）
+        else:
+            await ctx.send(embed=embed)
+    except Exception as e:
+        print(f"Help command error: {e}")
+        try:
+            await ctx.send("ヘルプメッセージの送信中にエラーが発生しました。", ephemeral=True)
+        except:
+            pass
 
 # ボットを実行
 async def main():
