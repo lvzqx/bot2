@@ -129,6 +129,39 @@ async def sync(ctx):
     except Exception as e:
         await ctx.send(f"❌ エラー: {e}")
 
+# カスタムヘルプコマンド
+@bot.command(name='help')
+async def custom_help(ctx):
+    embed = discord.Embed(
+        title='📚 利用可能なコマンド',
+        description='以下のコマンドが利用できます。スラッシュコマンド（/）でも利用可能です。',
+        color=discord.Color.blue()
+    )
+    
+    # スラッシュコマンドの説明
+    embed.add_field(
+        name='📝 投稿関連',
+        value='''
+        `/post` - 新しい投稿を作成
+        `/list [件数]` - 自分の投稿を一覧表示（デフォルト10件）
+        `/search [キーワード]` - 投稿を検索
+        `/delete [ID]` - 投稿を削除
+        `/edit [ID]` - 投稿を編集
+        ''',
+        inline=False
+    )
+    
+    # 管理コマンドの説明
+    if await bot.is_owner(ctx.author):
+        embed.add_field(
+            name='⚙️ 管理コマンド',
+            value='`!sync` - コマンドを同期（ボットオーナーのみ）',
+            inline=False
+        )
+    
+    embed.set_footer(text='各コマンドの詳細は /help コマンド名 で確認できます。')
+    await ctx.send(embed=embed)
+
 # ボットを実行
 async def main():
     async with bot:
