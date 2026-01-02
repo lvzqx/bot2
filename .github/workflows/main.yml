@@ -1,0 +1,54 @@
+name: Run Discord Bot
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'  # 5分おきに実行
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          
+      - name: Run health check
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          ALLOWED_CHANNEL_ID: ${{ secrets.ALLOWED_CHANNEL_ID }}
+        run: |
+          python -c "
+          import os
+          import discord
+          from discord.ext import commands
+          
+          intents = discord.Intents.default()
+          intents.messages = True
+          
+          class Bot(commands.Bot):
+              def __init__(self):
+                  super().__init__(command_prefix='!', intents=intents)
+                  self.allowed_channel_id = int(os.getenv('ALLOWED_CHANNEL_ID'))
+              
+              async def on_ready(self):
+                  try:
+                      channel = self.get_channel(self.allowed_channel_id)
+                      if channel:
+                          await channel.send('🔄 ヘルスチェック: ボットは正常に動作しています')
+                      print('ヘルスチェック: 正常')
+                  except Exception as e:
+                      print(f'ヘルスチェックエラー: {e}')
+                  await self.close()
+          
+          bot = Bot()
+          bot.run(os.getenv('DISCORD_TOKEN'))
+          "
