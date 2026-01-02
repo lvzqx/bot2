@@ -10,6 +10,8 @@ on:
 jobs:
   run-bot:
     runs-on: ubuntu-latest
+    
+    # 同じコミットに対して同時に複数のワークフローが実行されないようにする
     concurrency: 
       group: bot-${{ github.ref }}
       cancel-in-progress: true
@@ -31,12 +33,12 @@ jobs:
       id: check_bot
       env:
         DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+        ALLOWED_CHANNEL_IDS: ${{ secrets.ALLOWED_CHANNEL_ID }}
       run: |
         # 既存の実行中のワークフローをチェック
         RUNNING_JOBS=$(curl -s -H "Authorization: token ${{ github.token }}" \
           "https://api.github.com/repos/${{ github.repository }}/actions/runs?status=in_progress" | \
-          jq -r --arg run_id "${{ github.run_id }}" \
-          '.workflow_runs[] | select(.id | tostring != $run_id) | .id' | head -n 1)
+          jq -r '.workflow_runs[] | select(.id != ${{ github.run_id }}) | .id')
         
         if [ -z "$RUNNING_JOBS" ]; then
           echo "ボットが実行されていないため、起動します"
@@ -50,84 +52,48 @@ jobs:
       if: env.RUN_BOT == 'true'
       env:
         DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
-        ALLOWED_CHANNEL_IDS: ${{ secrets.ALLOWED_CHANNEL_IDS }}
+        ALLOWED_CHANNEL_IDS: ${{ secrets.ALLOWED_CHANNEL_ID }}
       run: |
-        # 必要なツールをインストール
-        sudo apt-get update
-        sudo apt-get install -y jq curl
-        
-        # ボットの状態をチェックする関数
-        check_bot_health() {
-          local channel_id=$(echo $ALLOWED_CHANNEL_IDS | cut -d',' -f1)
-          local response=$(curl -s -H "Authorization: Bot $DISCORD_TOKEN" \
-            "https://discord.com/api/v9/channels/$channel_id/messages?limit=1")
-          
-          # レスポンスを確認
-          if echo "$response" | jq -e '.message' | grep -q "401"; then
-            echo "認証エラー: トークンが無効です"
-            return 1
-          elif echo "$response" | jq -e '.message' | grep -q "404"; then
-            echo "チャンネルが見つかりません: $channel_id"
-            return 1
-          elif echo "$response" | jq -e '.message' | grep -q "rate limited"; then
-            echo "レートリミットに達しました"
-            return 1
-          fi
-          
-          return 0
-        }
+        # 既存のプロセスを終了
+        pkill -f "python.*bot.py" || true
         
         # ボットを起動
-        start_bot() {
-          echo "ボットを起動しています..."
-          nohup python bot.py > bot.log 2>&1 &
-          echo $! > bot.pid
-          sleep 10  # 起動待ち
-          
-          # 起動ログを確認
-          if ! grep -q "ログインしました" bot.log; then
-            echo "ボットの起動に失敗しました"
-            cat bot.log
-            return 1
-          fi
-          
-          echo "ボットが正常に起動しました (PID: $(cat bot.pid))"
-          return 0
-        }
+        nohup python bot.py > bot.log 2>&1 &
+        echo $! > bot.pid
         
-        # ボットの状態を確認
-        if ! check_bot_health; then
-          echo "ボットが応答しないため、再起動します"
-          pkill -f "python.*bot.py" || true
-          if ! start_bot; then
-            echo "ボットの起動に失敗しました"
-            exit 1
-          fi
-        else
-          echo "ボットは正常に動作しています"
+        # 起動を待つ
+        sleep 10
+        
+        # ログを表示
+        cat bot.log
+        
+        # プロセスが実行中か確認
+        if ! ps -p $(cat bot.pid) > /dev/null; then
+          echo "ボットの起動に失敗しました"
+          cat bot.log
+          exit 1
         fi
         
-        # ヘルスチェックループ
+        echo "ボットが正常に起動しました"
+        
+        # 無限ループで待機
         while true; do
-          sleep 300  # 5分待機
-          
-          if ! check_bot_health; then
-            echo "ボットが応答しないため、再起動します"
-            pkill -f "python.*bot.py" || true
-            if ! start_bot; then
-              echo "ボットの再起動に失敗しました"
-              exit 1
-            fi
-          else
-            echo "$(date): ボットは正常に動作しています"
+          # ボットがまだ実行中か確認
+          if ! ps -p $(cat bot.pid) > /dev/null; then
+            echo "ボットが終了しました。再起動します..."
+            # 再起動
+            nohup python bot.py > bot.log 2>&1 &
+            echo $! > bot.pid
+            sleep 10
           fi
+          # 1分ごとにチェック
+          sleep 60
         done
 
     - name: Show logs
       if: always()
       run: |
         if [ -f bot.log ]; then
-          echo "=== 最終ログ（最新50行）==="
+          echo "=== 最終ログ ==="
           tail -n 50 bot.log
-          echo "========================="
         fi
