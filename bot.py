@@ -129,6 +129,9 @@ async def sync(ctx):
     except Exception as e:
         await ctx.send(f"❌ エラー: {e}")
 
+# ヘルプコマンドを削除
+bot.remove_command('help')
+
 # カスタムヘルプコマンド
 @bot.command(name='help')
 async def custom_help(ctx):
