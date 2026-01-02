@@ -39,9 +39,13 @@ class ThoughtBot(commands.Bot):
         for ext in self.initial_extensions:
             try:
                 await self.load_extension(ext)
-                print(f'Loaded extension: {ext}')
+                print(f'✅ Loaded extension: {ext}')
             except Exception as e:
-                print(f'Failed to load extension {ext}: {e}')
+                print(f'❌ Failed to load extension {ext}: {e}')
+        
+        # コマンドツリーの同期
+        await self.tree.sync()
+        print('✅ コマンドツリーを同期しました')
 
     def init_db(self):
         cursor = self.db.cursor()
@@ -115,19 +119,30 @@ async def on_command_error(ctx, error):
         if owner:
             await owner.send(f'エラーが発生しました: {error}')
 
+# 同期用コマンド
+@bot.command()
+@commands.is_owner()
+async def sync(ctx):
+    try:
+        await bot.tree.sync()
+        await ctx.send("✅ コマンドを同期しました")
+    except Exception as e:
+        await ctx.send(f"❌ エラー: {e}")
+
 # ボットを実行
-def main():
+async def main():
+    async with bot:
+        await bot.start(os.getenv('DISCORD_TOKEN'))
+
+if __name__ == '__main__':
     token = os.getenv('DISCORD_TOKEN')
     if not token:
         print('エラー: DISCORD_TOKENが設定されていません。.envファイルを確認してください。')
-        return
-    
-    try:
-        bot.run(token)
-    except discord.LoginFailure:
-        print('ログインに失敗しました。トークンが正しいか確認してください。')
-    except Exception as e:
-        print(f'予期せぬエラーが発生しました: {e}')
-
-if __name__ == '__main__':
-    main()
+    else:
+        try:
+            import asyncio
+            asyncio.run(main())
+        except discord.LoginFailure:
+            print('ログインに失敗しました。トークンが正しいか確認してください。')
+        except Exception as e:
+            print(f'予期せぬエラーが発生しました: {e}')

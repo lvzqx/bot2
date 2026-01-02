@@ -169,5 +169,6 @@ class ListPaginationView(discord.ui.View):
         self.update_buttons()
         await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
 
+@app_commands.guild_only()
 async def setup(bot):
     await bot.add_cog(List(bot))
