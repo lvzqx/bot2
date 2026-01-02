@@ -19,7 +19,7 @@ class ThoughtBot(commands.Bot):
         super().__init__(
             command_prefix=commands.when_mentioned_or('!'),
             intents=intents,
-            activity=discord.Game(name="!help | メッセージを記録")
+            activity=discord.Game(name="/help | メッセージを記録")
         )
         self.initial_extensions = [
             'cogs.thoughts.post',
@@ -129,15 +129,13 @@ async def sync(ctx):
     except Exception as e:
         await ctx.send(f"❌ エラー: {e}")
 
-# ヘルプコマンドを削除
-bot.remove_command('help')
-
-# カスタムヘルプコマンド
-@bot.command(name='help')
-async def custom_help(ctx):
+# ヘルプコマンド（スラッシュコマンドのみ）
+@bot.tree.command(name='help', description='利用可能なコマンドを表示します')
+async def help_command(interaction: discord.Interaction):
+    # エフェメラルメッセージとして送信
     embed = discord.Embed(
         title='📚 利用可能なコマンド',
-        description='以下のコマンドが利用できます。スラッシュコマンド（/）でも利用可能です。',
+        description='以下のコマンドが利用できます。',
         color=discord.Color.blue()
     )
     
