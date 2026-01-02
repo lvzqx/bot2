@@ -83,6 +83,19 @@ class Post(commands.Cog):
                 # データベーストランザクション開始
                 cursor = self.bot.db.cursor()
                 try:
+                    # テーブルが存在するか確認し、必要に応じてカラムを追加
+                    cursor.execute("PRAGMA table_info(thoughts)")
+                    columns = [column[1] for column in cursor.fetchall()]
+                    
+                    if 'updated_at' not in columns:
+                        cursor.execute('ALTER TABLE thoughts ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+                    if 'display_name' not in columns:
+                        cursor.execute('ALTER TABLE thoughts ADD COLUMN display_name TEXT')
+                    
+                    # 現在の日時を取得
+                    now = datetime.now().isoformat()
+                    
+                    # 投稿を挿入
                     cursor.execute('''
                         INSERT INTO thoughts (
                             user_id, content, category, image_url, 
@@ -96,8 +109,8 @@ class Post(commands.Cog):
                         image_url,
                         is_anonymous,  # 匿名設定
                         is_private,  # 公開設定
-                        datetime.now().isoformat(),
-                        datetime.now().isoformat(),
+                        now,
+                        now,
                         None if is_anonymous else interaction.user.display_name  # 表示名を保存
                     ))
                     
