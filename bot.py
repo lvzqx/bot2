@@ -22,7 +22,12 @@ class ThoughtBot(commands.Bot):
             intents=intents,
             activity=discord.Game(name="/post でつぶやきを投稿")
         )
-        self.initial_extensions = ['cogs.thoughts']
+        self.initial_extensions = [
+    'cogs.thoughts.post',
+    'cogs.thoughts.list',
+    'cogs.thoughts.search',
+    'cogs.thoughts.delete'
+    ]
         self.db = None
         self.allowed_channel_id = int(os.getenv('ALLOWED_CHANNEL_ID', 0))  # 環境変数から許可するチャンネルIDを取得
 
