@@ -1,85 +1,133 @@
 import os
 import discord
-from discord import app_commands
 from discord.ext import commands
-import aiosqlite
-import datetime
 from dotenv import load_dotenv
-from typing import Optional
+import sqlite3
+import datetime
 
-# Load environment variables
+# 環境変数の読み込み
 load_dotenv()
 
-# Initialize bot with intents
+# インテントの設定
 intents = discord.Intents.default()
-intents.messages = True
 intents.message_content = True
+intents.members = True
 
-class ThoughtBot(commands.Bot):    
+# ボットの設定
+class ThoughtBot(commands.Bot):
     def __init__(self):
         super().__init__(
-            command_prefix='!',
+            command_prefix=commands.when_mentioned_or('!'),
             intents=intents,
-            activity=discord.Game(name="/post でつぶやきを投稿")
+            activity=discord.Game(name="!help | メッセージを記録")
         )
         self.initial_extensions = [
-    'cogs.thoughts.post',
-    'cogs.thoughts.list',
-    'cogs.thoughts.search',
-    'cogs.thoughts.delete'
-    ]
+            'cogs.thoughts.post',
+            'cogs.thoughts.list',
+            'cogs.thoughts.search',
+            'cogs.thoughts.delete',
+            'cogs.thoughts.edit'
+        ]
         self.db = None
-        self.allowed_channel_id = int(os.getenv('ALLOWED_CHANNEL_ID', 0))  # 環境変数から許可するチャンネルIDを取得
 
     async def setup_hook(self):
-        # Initialize database
-        self.db = await aiosqlite.connect('thoughts.db')
-        await self.create_tables()
+        # データベースの初期化
+        self.db = sqlite3.connect('thoughts.db')
+        self.init_db()
         
-        # Load cogs
+        # コグの読み込み
         for ext in self.initial_extensions:
             try:
                 await self.load_extension(ext)
-                print(f'拡張機能を読み込みました: {ext}')
+                print(f'Loaded extension: {ext}')
             except Exception as e:
                 print(f'Failed to load extension {ext}: {e}')
-        
-        # Sync commands
-        await self.tree.sync()
-        print("コマンドを同期しました！")
 
-    async def create_tables(self):
-        await self.db.execute('''
+    def init_db(self):
+        cursor = self.db.cursor()
+        cursor.execute('''
         CREATE TABLE IF NOT EXISTS thoughts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
             content TEXT NOT NULL,
-            category TEXT NOT NULL,
+            category TEXT,
             image_url TEXT,
-            show_name BOOLEAN DEFAULT 1,
+            is_anonymous BOOLEAN DEFAULT 0,
             is_private BOOLEAN DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         ''')
-        await self.db.commit()
+        self.db.commit()
 
     async def close(self):
         if self.db:
-            await self.db.close()
+            self.db.close()
         await super().close()
 
-# Initialize bot
+    async def on_ready(self):
+        print(f'Logged in as {self.user} (ID: {self.user.id})')
+        print('------')
+
+    async def on_error(self, event_method: str, *args, **kwargs) -> None:
+        import traceback
+        error = traceback.format_exc()
+        print(f'Error in {event_method}: {error}')
+        
+        # エラーを開発者に通知
+        owner = await self.fetch_user(self.owner_id) if hasattr(self, 'owner_id') else None
+        if owner:
+            error_msg = f'```py\n{error[:1900]}\n```'
+            await owner.send(f'**Error in {event_method}**\n{error_msg}')
+
+# データベーストランザクション用デコレータ
+def with_transaction(func):
+    async def wrapper(*args, **kwargs):
+        self = args[0] if args else None
+        if not hasattr(self, 'db') or not self.db:
+            return await func(*args, **kwargs)
+            
+        try:
+            result = await func(*args, **kwargs)
+            self.db.commit()
+            return result
+        except Exception as e:
+            self.db.rollback()
+            raise e
+    return wrapper
+
+# ボットの起動
 bot = ThoughtBot()
 
 @bot.event
-async def on_ready():
-    print(f'ログインしました: {bot.user} (ID: {bot.user.id})')
-    print('----------------------------------')
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandNotFound):
+        return
+    elif isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send('必要な引数が不足しています。コマンドを確認してください。')
+    elif isinstance(error, commands.MissingPermissions):
+        await ctx.send('このコマンドを実行する権限がありません。')
+    else:
+        error_msg = f'エラーが発生しました: {error}'
+        print(error_msg)
+        await ctx.send('エラーが発生しました。後でもう一度お試しください。')
+        # エラーログを開発者に送信
+        owner = await bot.fetch_user(bot.owner_id) if hasattr(bot, 'owner_id') and bot.owner_id else None
+        if owner:
+            await owner.send(f'エラーが発生しました: {error}')
 
-# Run the bot
-if __name__ == '__main__':
-    TOKEN = os.getenv('DISCORD_TOKEN')
-    if not TOKEN:
-        raise ValueError("環境変数にDISCORD_TOKENが設定されていません")
+# ボットを実行
+def main():
+    token = os.getenv('DISCORD_TOKEN')
+    if not token:
+        print('エラー: DISCORD_TOKENが設定されていません。.envファイルを確認してください。')
+        return
     
-    bot.run(TOKEN)
+    try:
+        bot.run(token)
+    except discord.LoginFailure:
+        print('ログインに失敗しました。トークンが正しいか確認してください。')
+    except Exception as e:
+        print(f'予期せぬエラーが発生しました: {e}')
+
+if __name__ == '__main__':
+    main()
