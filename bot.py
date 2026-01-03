@@ -19,7 +19,7 @@ class ThoughtBot(commands.Bot):
         super().__init__(
             command_prefix=commands.when_mentioned_or('!'),
             intents=intents,
-            activity=discord.Game(name="/help ")
+            activity=discord.Game(name="/help | メッセージを記録")
         )
         self.initial_extensions = [
             'cogs.thoughts.post',
@@ -193,4 +193,3 @@ if __name__ == '__main__':
             print('ログインに失敗しました。トークンが正しいか確認してください。')
         except Exception as e:
             print(f'予期せぬエラーが発生しました: {e}')
-

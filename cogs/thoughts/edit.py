@@ -16,13 +16,14 @@ class Edit(commands.Cog):
             
             # 内容入力フィールド
             self.content = discord.ui.TextInput(
-                label='内容',
+                label='内容 (最大2000文字)',
                 style=discord.TextStyle.paragraph,
                 default=current_content,
                 placeholder='投稿の内容を入力してください...',
                 required=True,
-                max_length=1000,
-                min_length=1
+                max_length=2000,
+                min_length=1,
+                style=discord.TextStyle.long
             )
             self.add_item(self.content)
             
@@ -131,45 +132,99 @@ class Edit(commands.Cog):
                 else:
                     await interaction.followup.send("❌ エラーが発生しました。もう一度お試しください。", ephemeral=True)
 
-    @app_commands.command(name="edit", description="投稿を編集します")
-    @app_commands.describe(
-        post_id="編集する投稿のID",
-        field="編集する項目 (content, category) - 省略するとモーダルが開きます",
-        new_value="新しい値 - フィールドを指定する場合は必須"
-    )
-    async def edit_post(
-        self, 
-        interaction: discord.Interaction, 
-        post_id: int,
-        field: str = None,
-        new_value: str = None
-    ):
-        """投稿を編集します（モーダルまたはコマンド引数で）"""
-        try:
-            await interaction.response.defer(ephemeral=True)
+    class PostSelect(discord.ui.Select):
+        def __init__(self, posts):
+            options = []
+            for post in posts[:25]:  # Discordの制限で最大25個まで
+                post_id, content, category = post
+                # プレビューテキストを短く整形
+                preview = f"{content[:30]}{'...' if len(content) > 30 else ''}"
+                options.append(discord.SelectOption(
+                    label=f"ID: {post_id} - {category}",
+                    description=preview,
+                    value=str(post_id)
+                ))
             
-            # 現在の投稿を取得
-            cursor = self.bot.db.cursor()
+            super().__init__(
+                placeholder="編集する投稿を選択...",
+                min_values=1,
+                max_values=1,
+                options=options
+            )
+        
+        async def callback(self, interaction: discord.Interaction):
+            await interaction.response.defer(ephemeral=True)
+            post_id = int(self.values[0])
+            
+            # 選択された投稿を取得
+            cursor = self.view.cog.bot.db.cursor()
             cursor.execute('''
                 SELECT content, category, user_id, is_private, is_anonymous
                 FROM thoughts 
-                WHERE id = ?
-            ''', (post_id,))
+                WHERE id = ? AND user_id = ?
+            ''', (post_id, interaction.user.id))
             
             post = cursor.fetchone()
             
             if not post:
-                await interaction.followup.send("❌ 投稿が見つかりません。")
+                await interaction.followup.send("❌ 投稿が見つからないか、編集権限がありません。", ephemeral=True)
                 return
+            
+            current_content, current_category, _, _, _ = post
+            
+            # 編集モーダルを表示
+            modal = self.view.cog.EditModal(
+                bot=self.view.cog.bot,
+                post_id=post_id,
+                current_content=current_content,
+                current_category=current_category
+            )
+            
+            await interaction.followup.send("📝 編集モーダルを開いています...", ephemeral=True, delete_after=1)
+            await interaction.followup.send_modal(modal)
+    
+    class PostSelectView(discord.ui.View):
+        def __init__(self, cog, posts):
+            super().__init__(timeout=60)
+            self.cog = cog
+            self.add_item(PostSelect(posts))
+    
+    @app_commands.command(name="edit", description="投稿を編集します")
+    @app_commands.describe(
+        post_id="編集する投稿のID（省略すると投稿一覧を表示）"
+    )
+    async def edit_post(
+        self, 
+        interaction: discord.Interaction, 
+        post_id: int = None
+    ):
+        """投稿を編集します（モーダルで編集）"""
+        try:
+            await interaction.response.defer(ephemeral=True)
+            
+            # post_idが指定されている場合は直接編集
+            if post_id is not None:
+                # 現在の投稿を取得
+                cursor = self.bot.db.cursor()
+                cursor.execute('''
+                    SELECT content, category, user_id
+                    FROM thoughts 
+                    WHERE id = ?
+                ''', (post_id,))
                 
-            if post[2] != interaction.user.id:
-                await interaction.followup.send("❌ この投稿を編集する権限がありません。")
-                return
-            
-            current_content, current_category, _, is_private, is_anonymous = post
-            
-            # モーダルで編集
-            if field is None or new_value is None:
+                post = cursor.fetchone()
+                
+                if not post:
+                    await interaction.followup.send("❌ 投稿が見つかりません。")
+                    return
+                    
+                if post[2] != interaction.user.id:
+                    await interaction.followup.send("❌ この投稿を編集する権限がありません。")
+                    return
+                
+                current_content, current_category, _ = post
+                
+                # モーダルで編集
                 modal = self.EditModal(
                     bot=self.bot,
                     post_id=post_id,
@@ -177,20 +232,33 @@ class Edit(commands.Cog):
                     current_category=current_category
                 )
                 
-                # モーダルを表示
                 await interaction.followup.send("📝 編集モーダルを開いています...", ephemeral=True, delete_after=1)
                 await interaction.followup.send_modal(modal)
                 return
             
-            # コマンド引数で編集
-            field = field.lower()
-            if field not in ['content', 'category']:
-                await interaction.followup.send("❌ 無効なフィールドです。'content' または 'category' を指定してください。")
+            # post_idが指定されていない場合は投稿一覧を表示
+            cursor = self.bot.db.cursor()
+            cursor.execute('''
+                SELECT id, content, category
+                FROM thoughts 
+                WHERE user_id = ?
+                ORDER BY created_at DESC
+                LIMIT 25
+            ''', (interaction.user.id,))
+            
+            posts = cursor.fetchall()
+            
+            if not posts:
+                await interaction.followup.send("❌ 編集可能な投稿が見つかりませんでした。", ephemeral=True)
                 return
             
-            if not new_value or not new_value.strip():
-                await interaction.followup.send(f"❌ {field}の値を指定してください。")
-                return
+            # 投稿選択用のビューを表示
+            view = self.PostSelectView(self, posts)
+            await interaction.followup.send(
+                "📝 編集する投稿を選択してください（最新25件）",
+                view=view,
+                ephemeral=True
+            )
             
             # 更新処理
             cursor.execute(f'''
