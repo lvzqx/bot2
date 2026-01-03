@@ -17,7 +17,6 @@ class Edit(commands.Cog):
             # 内容入力フィールド
             self.content = discord.ui.TextInput(
                 label='内容 (最大2000文字)',
-                style=discord.TextStyle.paragraph,
                 default=current_content,
                 placeholder='投稿の内容を入力してください...',
                 required=True,
