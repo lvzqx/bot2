@@ -26,7 +26,7 @@ class ThoughtBot(commands.Bot):
             'cogs.thoughts.list',
             'cogs.thoughts.search',
             'cogs.thoughts.delete',
-            'cogs.thoughts.edit'
+            'cogs.thoughts.edit',
         ]
         self.db = None
 
@@ -193,4 +193,3 @@ if __name__ == '__main__':
             print('ログインに失敗しました。トークンが正しいか確認してください。')
         except Exception as e:
             print(f'予期せぬエラーが発生しました: {e}')
-
