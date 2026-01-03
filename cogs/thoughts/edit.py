@@ -239,7 +239,8 @@ class Edit(commands.Cog):
                         current_category=current_category
                     )
                     
-                    await interaction.followup.send("📝 編集モーダルを開いています...", ephemeral=True, delete_after=1)
+                    # モーダルを開く前に一時的なメッセージを送信
+                    await interaction.followup.send("📝 編集モーダルを開いています...", ephemeral=True)
                     await interaction.followup.send_modal(modal)
                 except Exception as e:
                     error_msg = f"モーダルの作成中にエラーが発生しました: {str(e)}"
