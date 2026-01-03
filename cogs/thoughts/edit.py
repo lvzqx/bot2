@@ -159,7 +159,6 @@ class Edit(commands.Cog):
             )
         
         async def callback(self, interaction: discord.Interaction):
-            await interaction.response.defer(ephemeral=True)
             post_id = int(self.values[0])
             
             # 選択された投稿を取得
@@ -173,7 +172,10 @@ class Edit(commands.Cog):
             post = cursor.fetchone()
             
             if not post:
-                await interaction.followup.send("❌ 投稿が見つからないか、編集権限がありません。", ephemeral=True)
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("❌ 投稿が見つからないか、編集権限がありません。", ephemeral=True)
+                else:
+                    await interaction.followup.send("❌ 投稿が見つからないか、編集権限がありません。", ephemeral=True)
                 return
             
             current_content, current_category, _, _, _ = post
@@ -186,8 +188,12 @@ class Edit(commands.Cog):
                 current_category=current_category
             )
             
-            await interaction.followup.send("📝 編集モーダルを開いています...", ephemeral=True, delete_after=1)
-            await interaction.followup.send_modal(modal)
+            # モーダルを直接表示
+            try:
+                await interaction.response.send_modal(modal)
+            except discord.InteractionResponded:
+                # 既にレスポンスが送信されている場合は、フォローアップとして送信
+                await interaction.followup.send("❌ エラーが発生しました。もう一度お試しください。", ephemeral=True)
     
     class PostSelectView(discord.ui.View):
         def __init__(self, cog, posts):
@@ -196,9 +202,7 @@ class Edit(commands.Cog):
             self.add_item(PostSelect(posts))
     
     @app_commands.command(name="edit", description="投稿を編集します")
-    @app_commands.describe(
-        post_id="編集する投稿のID（省略すると投稿一覧を表示）"
-    )
+    @app_commands.describe(post_id="編集する投稿のID（省略可）")
     async def edit_post(
         self, 
         interaction: discord.Interaction, 
@@ -206,14 +210,12 @@ class Edit(commands.Cog):
     ):
         """投稿を編集します（モーダルで編集）"""
         try:
-            await interaction.response.defer(ephemeral=True)
-            
-            # post_idが指定されている場合は直接編集
+            # post_idが指定されている場合は直接編集モーダルを表示
             if post_id is not None:
-                # 現在の投稿を取得
+                # データベースから投稿を取得
                 cursor = self.bot.db.cursor()
                 cursor.execute('''
-                    SELECT content, category, user_id
+                    SELECT content, category, user_id 
                     FROM thoughts 
                     WHERE id = ?
                 ''', (post_id,))
@@ -221,32 +223,29 @@ class Edit(commands.Cog):
                 post = cursor.fetchone()
                 
                 if not post:
-                    await interaction.followup.send("❌ 投稿が見つかりません。")
-                    return
-                    
-                if post[2] != interaction.user.id:
-                    await interaction.followup.send("❌ この投稿を編集する権限がありません。")
+                    await interaction.response.send_message("❌ 指定された投稿が見つかりません。", ephemeral=True)
                     return
                 
-                current_content, current_category, _ = post
+                current_content, current_category, post_user_id = post
                 
-                # モーダルで編集
-                try:
-                    modal = self.bot.get_cog('Edit').EditModal(
-                        bot=self.bot,
-                        post_id=post_id,
-                        current_content=current_content,
-                        current_category=current_category
-                    )
-                    
-                    # モーダルを直接送信
-                    await interaction.response.send_modal(modal)
-                except Exception as e:
-                    error_msg = f"モーダルの作成中にエラーが発生しました: {str(e)}"
-                    print(f"Modal Creation Error: {error_msg}")
-                    await interaction.followup.send(f"❌ エラーが発生しました: {str(e)}", ephemeral=True)
+                # 権限チェック（投稿者本人または管理者のみ編集可能）
+                is_owner = post_user_id == interaction.user.id
+                is_admin = interaction.user.guild_permissions.administrator if interaction.guild else False
+                
+                if not (is_owner or is_admin):
+                    await interaction.response.send_message("❌ この投稿を編集する権限がありません。", ephemeral=True)
+                    return
+                
+                # モーダルを表示
+                modal = self.EditModal(
+                    bot=self.bot,
+                    post_id=post_id,
+                    current_content=current_content,
+                    current_category=current_category
+                )
+                await interaction.response.send_modal(modal)
                 return
-            
+                
             # post_idが指定されていない場合は投稿一覧を表示
             cursor = self.bot.db.cursor()
             cursor.execute('''
@@ -260,12 +259,12 @@ class Edit(commands.Cog):
             posts = cursor.fetchall()
             
             if not posts:
-                await interaction.followup.send("❌ 編集可能な投稿が見つかりませんでした。", ephemeral=True)
+                await interaction.response.send_message("❌ 編集可能な投稿が見つかりませんでした。", ephemeral=True)
                 return
             
             # 投稿選択用のビューを表示
             view = self.PostSelectView(self, posts)
-            await interaction.followup.send(
+            await interaction.response.send_message(
                 "📝 編集する投稿を選択してください（最新25件）",
                 view=view,
                 ephemeral=True
@@ -274,7 +273,6 @@ class Edit(commands.Cog):
         except Exception as e:
             error_msg = f"コマンド実行中にエラーが発生しました: {str(e)}\n```{type(e).__name__}```"
             print(f"Command Error in edit_post: {error_msg}")
-            print(f"Edit Command Error: {error_msg}")
             if not interaction.response.is_done():
                 await interaction.response.send_message("❌ エラーが発生しました。もう一度お試しください。", ephemeral=True)
             else:
