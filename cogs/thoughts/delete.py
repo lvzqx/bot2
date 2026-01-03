@@ -1,3 +1,4 @@
+import asyncio
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -6,6 +7,36 @@ class Delete(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.db = bot.db
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        # ボット自身のメッセージやDM以外は無視
+        if message.author == self.bot.user or not isinstance(message.channel, discord.DMChannel):
+            return
+
+        # 削除コマンドのチェック
+        if message.content.lower() in ['削除', 'delete', 'さくじょ']:
+            try:
+                # このスレッドのボットのメッセージを取得
+                async for msg in message.channel.history(limit=100):
+                    if msg.author == self.bot.user:
+                        try:
+                            await msg.delete()
+                        except:
+                            continue
+                
+                # 確認メッセージを送信（すぐに削除）
+                confirm = await message.channel.send("✅ メッセージを削除しました")
+                await asyncio.sleep(3)  # 3秒後に削除
+                await confirm.delete()
+                
+            except Exception as e:
+                print(f"DMメッセージ削除エラー: {e}")
+                try:
+                    await message.channel.send("❌ メッセージの削除中にエラーが発生しました", delete_after=5)
+                except:
+                    pass
+            return
 
     @app_commands.command(name="delete", description="投稿を削除します")
     @app_commands.describe(post_id="削除する投稿のID")
