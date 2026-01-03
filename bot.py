@@ -49,6 +49,7 @@ class ThoughtBot(commands.Bot):
 
     def init_db(self):
         cursor = self.db.cursor()
+        # メインの投稿テーブル
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS thoughts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,6 +60,16 @@ class ThoughtBot(commands.Bot):
             is_anonymous BOOLEAN DEFAULT 0,
             is_private BOOLEAN DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        ''')
+        
+        # メッセージ参照テーブル（メッセージ削除用）
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS message_references (
+            post_id INTEGER PRIMARY KEY,
+            message_id TEXT NOT NULL,
+            channel_id TEXT NOT NULL,
+            FOREIGN KEY (post_id) REFERENCES thoughts (id) ON DELETE CASCADE
         )
         ''')
         self.db.commit()

@@ -116,10 +116,9 @@ class Post(commands.Cog):
                     
                     # 投稿完了メッセージを表示
                     embed = discord.Embed(
-                        title='📝 投稿が完了しました',
+                        title='✅ 投稿が完了しました',
                         description=content,
-                        color=discord.Color.green(),
-                        timestamp=datetime.now()
+                        color=discord.Color.green()
                     )
                     
                     # 投稿者情報を設定
@@ -187,6 +186,16 @@ class Post(commands.Cog):
                             
                             # チャンネルに投稿
                             message = await interaction.channel.send(embed=channel_embed)
+                            
+                            # メッセージ参照をデータベースに保存
+                            try:
+                                cursor.execute('''
+                                    INSERT INTO message_references (post_id, message_id, channel_id)
+                                    VALUES (?, ?, ?)
+                                ''', (post_id, message.id, message.channel.id))
+                                self.bot.db.commit()
+                            except Exception as e:
+                                print(f"メッセージ参照の保存中にエラーが発生しました: {e}")
                             
                             # 確認メッセージを更新
                             embed.add_field(name='チャンネル', value=f'[投稿を表示]({message.jump_url})', inline=False)

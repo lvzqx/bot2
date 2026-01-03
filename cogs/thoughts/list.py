@@ -23,7 +23,7 @@ class List(commands.Cog):
             cursor = self.bot.db.cursor()
             try:
                 cursor.execute('''
-                    SELECT id, content, category, created_at, is_private
+                    SELECT id, content, category, created_at, is_private, display_name
                     FROM thoughts 
                     WHERE user_id = ?
                     ORDER BY created_at DESC
@@ -84,7 +84,7 @@ class List(commands.Cog):
                         
                         # メインの埋め込みに追加
                         embed.add_field(
-                            name=f"ID: {post_id} | {created_at_str}",
+                            name=f"ID: {post_id}",
                             value="",
                             inline=False
                         )

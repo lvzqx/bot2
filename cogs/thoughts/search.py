@@ -96,8 +96,8 @@ class Search(commands.Cog):
             else:
                 embed.set_author(name=author_name)
             
-            # フッターに投稿日時とカテゴリーを表示
-            footer_text = f"カテゴリー: {category} | {created_at_str}"
+            # フッターにカテゴリーを表示
+            footer_text = f"カテゴリー: {category}"
             if is_private:
                 footer_text += " | 🔒 非公開"
             embed.set_footer(text=footer_text)
