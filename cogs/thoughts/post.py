@@ -240,11 +240,23 @@ class Post(commands.Cog):
                     raise e
                     
             except Exception as e:
+                error_msg = str(e)
+                print(f"[ERROR] 投稿エラー: {error_msg}")
+                
+                # エラーメッセージを適切に整形
+                if "UNIQUE constraint failed" in error_msg:
+                    error_msg = "このメッセージは既に投稿されています。"
+                elif "no such table" in error_msg.lower():
+                    error_msg = "データベースの初期化に失敗しました。管理者に連絡してください。"
+                elif "no such column" in error_msg.lower():
+                    error_msg = "データベースの構造に問題があります。管理者に連絡してください。"
+                
                 error_embed = discord.Embed(
                     title='❌ エラー',
-                    description=f'投稿中にエラーが発生しました: {str(e)}',
+                    description=f'投稿中にエラーが発生しました: {error_msg}',
                     color=discord.Color.red()
                 )
+                
                 try:
                     # インタラクションがまだ有効か確認
                     if not interaction.response.is_done():
