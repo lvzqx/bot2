@@ -41,6 +41,97 @@ class Delete(commands.Cog):
     @app_commands.command(name="delete", description="投稿を削除します")
     @app_commands.describe(post_id="削除する投稿のID")
     async def delete_post(self, interaction: discord.Interaction, post_id: int):
+        """指定されたIDの投稿を削除します"""
+        await interaction.response.defer(ephemeral=True)
+        
+        try:
+            # 投稿の存在確認と情報取得
+            cursor = self.bot.db.cursor()
+            cursor.execute('''
+                SELECT user_id, is_private, is_anonymous, content, category
+                FROM thoughts 
+                WHERE id = ?
+            ''', (post_id,))
+            
+            post = cursor.fetchone()
+            
+            if not post:
+                await interaction.followup.send("❌ 指定された投稿が見つかりません。", ephemeral=True)
+                return
+            
+            post_user_id, is_private, is_anonymous, content, category = post
+            
+            # 権限チェック（投稿者本人または管理者のみ削除可能）
+            is_owner = post_user_id == interaction.user.id
+            is_admin = interaction.user.guild_permissions.administrator if interaction.guild else False
+            
+            if not (is_owner or is_admin):
+                await interaction.followup.send("❌ この投稿を削除する権限がありません。", ephemeral=True)
+                return
+            
+            # 非公開投稿の場合はDMからも削除
+            if is_private:
+                try:
+                    # 投稿者を取得
+                    user = self.bot.get_user(post_user_id)
+                    if user:
+                        # DMチャンネルを取得または作成
+                        dm_channel = user.dm_channel or await user.create_dm()
+                        
+                        # DM内のメッセージを検索して削除
+                        async for message in dm_channel.history(limit=100):
+                            if message.author == self.bot.user and message.embeds:
+                                embed = message.embeds[0]
+                                footer = embed.footer.text if embed.footer else ""
+                                if f"ID: {post_id}" in footer:
+                                    await message.delete()
+                                    break
+                except Exception as e:
+                    print(f"DMメッセージ削除エラー: {e}")
+            else:
+                # 公開投稿の場合はチャンネルから削除
+                cursor.execute('''
+                    SELECT message_id, channel_id 
+                    FROM message_references 
+                    WHERE post_id = ?
+                ''', (post_id,))
+                
+                for message_id, channel_id in cursor.fetchall():
+                    try:
+                        channel = self.bot.get_channel(channel_id)
+                        if channel:
+                            message = await channel.fetch_message(message_id)
+                            if message:
+                                await message.delete()
+                    except Exception as e:
+                        print(f"メッセージ削除エラー: {e}")
+            
+            # メッセージ参照を削除
+            cursor.execute('''
+                DELETE FROM message_references 
+                WHERE post_id = ?
+            ''', (post_id,))
+            
+            # 投稿を削除
+            cursor.execute('''
+                DELETE FROM thoughts 
+                WHERE id = ?
+            ''', (post_id,))
+            
+            self.bot.db.commit()
+            
+            # 削除完了メッセージ
+            await interaction.followup.send(f"✅ 投稿を削除しました (ID: {post_id})", ephemeral=True)
+            
+        except Exception as e:
+            self.bot.db.rollback()
+            error_msg = f"削除中にエラーが発生しました: {str(e)}"
+            print(f"Delete Error: {error_msg}")
+            await interaction.followup.send(f"❌ {error_msg}", ephemeral=True)
+
+    @app_commands.command(name="delete", description="投稿を削除します")
+    @app_commands.describe(post_id="削除する投稿のID")
+    async def delete_post(self, interaction: discord.Interaction, post_id: int):
         """指定したIDの投稿を削除します"""
         await interaction.response.defer(ephemeral=True)
         

@@ -149,25 +149,33 @@ class Post(commands.Cog):
                     # チャンネルまたはDMに投稿
                     try:
                         if is_private:
-                            # 非公開の場合はDMに送信
-                            dm_channel = await interaction.user.create_dm()
-                            dm_embed = discord.Embed(
-                                description=content,
-                                color=discord.Color.blue()
-                            )
-                            
-                            # 投稿者情報を設定
-                            if not is_anonymous:
-                                dm_embed.set_author(
-                                    name=interaction.user.display_name,
-                                    icon_url=str(interaction.user.display_avatar.url)
+                            try:
+                                # 投稿者にDMを送信
+                                dm_embed = discord.Embed(
+                                    description=content,
+                                    color=discord.Color.blue()
                                 )
-                            else:
-                                dm_embed.set_author(name='匿名')
-                            
-                            # フッターにカテゴリーと投稿IDを表示
-                            dm_embed.set_footer(text=f'カテゴリー: {category} | ID: {post_id} | 非公開')
-                            message = await dm_channel.send(embed=dm_embed)
+                                author_name = '匿名' if is_anonymous else interaction.user.display_name
+                                author_avatar = None if is_anonymous else str(interaction.user.display_avatar.url)
+                                dm_embed.set_author(name=author_name, icon_url=author_avatar)
+                                
+                                if category:
+                                    dm_embed.add_field(name="カテゴリー", value=category, inline=True)
+                                
+                                # 画像があれば追加
+                                if image_url:
+                                    dm_embed.set_image(url=image_url)
+                                
+                                dm_embed.set_footer(text=f"ID: {post_id} | {now}")
+                                
+                                # 送信先のユーザーを取得
+                                user = interaction.user
+                                if user:
+                                    dm_channel = user.dm_channel or await user.create_dm()
+                                    await dm_channel.send(embed=dm_embed)
+                            except Exception as e:
+                                print(f"DM送信エラー: {e}")
+                                await interaction.followup.send("❌ 非公開メッセージの送信中にエラーが発生しました。", ephemeral=True)
                             
                             # 確認メッセージを更新
                             embed.add_field(name='配信先', value='DMに送信されました', inline=False)
