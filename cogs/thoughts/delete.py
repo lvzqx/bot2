@@ -109,10 +109,19 @@ class Delete(commands.Cog):
                         message_id, channel_id = msg_ref
                         print(f"[DEBUG] メッセージ削除を試みます: message_id={message_id}, channel_id={channel_id}")
                         
+                        # チャンネルを取得
                         channel = self.bot.get_channel(int(channel_id))
+                        
+                        # DMチャンネルの場合、ユーザーからDMチャンネルを取得
+                        if not channel and isinstance(message.channel, discord.DMChannel):
+                            print("[DEBUG] DMチャンネルを検出、ユーザーからDMチャンネルを取得")
+                            channel = message.channel
+                        
                         if channel:
-                            print(f"[DEBUG] チャンネルを取得: {channel}")
+                            print(f"[DEBUG] チャンネルを取得: {channel} (type: {type(channel)})")
+                            
                             try:
+                                # メッセージを取得して削除
                                 msg = await channel.fetch_message(int(message_id))
                                 if msg:
                                     print("[DEBUG] メッセージを削除します")
@@ -120,10 +129,46 @@ class Delete(commands.Cog):
                                     print("[DEBUG] メッセージ削除完了")
                             except discord.NotFound:
                                 print("[DEBUG] メッセージは既に削除されています")
+                                # メッセージが既に削除されている場合は、DMの履歴からも削除を試みる
+                                if isinstance(channel, discord.DMChannel):
+                                    print("[DEBUG] DMの履歴からメッセージを検索中...")
+                                    async for msg in channel.history(limit=100):
+                                        if msg.embeds and msg.embeds[0].footer and f"ID: {post_id}" in str(msg.embeds[0].footer.text):
+                                            print("[DEBUG] 埋め込みメッセージを検出、削除します")
+                                            await msg.delete()
+                                            print("[DEBUG] DMの埋め込みメッセージを削除しました")
+                                            break
                             except Exception as e:
                                 print(f"[ERROR] メッセージ削除エラー: {type(e).__name__}: {e}")
+                                # エラーが発生した場合も、DMの履歴から削除を試みる
+                                if isinstance(channel, discord.DMChannel):
+                                    try:
+                                        async for msg in channel.history(limit=100):
+                                            if msg.embeds and msg.embeds[0].footer and f"ID: {post_id}" in str(msg.embeds[0].footer.text):
+                                                print("[DEBUG] エラー後のDMメッセージ削除を試みます")
+                                                await msg.delete()
+                                                print("[DEBUG] DMの埋め込みメッセージを削除しました")
+                                                break
+                                    except Exception as e2:
+                                        print(f"[ERROR] 代替削除処理中にエラー: {type(e2).__name__}: {e2}")
                     except Exception as e:
-                        print(f"[ERROR] メッセージ削除処理中にエラーが発生: {type(e).__name__}: {e}")
+                        error_msg = f"[ERROR] メッセージ削除処理中にエラー: {type(e).__name__}: {e}"
+                        print(error_msg)
+                        import traceback
+                        traceback.print_exc()
+                        
+                        # エラーが発生した場合でも、DMの履歴から削除を試みる
+                        if isinstance(message.channel, discord.DMChannel):
+                            try:
+                                print("[DEBUG] 例外発生時のDMメッセージ削除を試みます")
+                                async for msg in message.channel.history(limit=100):
+                                    if msg.embeds and msg.embeds[0].footer and f"ID: {post_id}" in str(msg.embeds[0].footer.text):
+                                        print("[DEBUG] 埋め込みメッセージを検出、削除します")
+                                        await msg.delete()
+                                        print("[DEBUG] DMの埋め込みメッセージを削除しました")
+                                        break
+                            except Exception as e2:
+                                print(f"[ERROR] 例外処理中のDMメッセージ削除エラー: {type(e2).__name__}: {e2}")
                 
                 print("[DEBUG] 完了メッセージを送信")
                 await message.channel.send(f"✅ 非公開投稿 (ID: {post_id}) を削除しました")
