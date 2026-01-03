@@ -68,25 +68,44 @@ class Delete(commands.Cog):
                         cursor.execute('DELETE FROM message_references WHERE post_id = ?', (post_id,))
                         self.original_interaction.client.db.commit()
                         
-                        # チャンネルメッセージを削除
+                        # メッセージ削除処理
                         try:
                             if message_id and channel_id:
                                 # チャンネルIDを整数に変換
                                 channel_id_int = int(channel_id)
-                                channel = self.original_interaction.client.get_channel(channel_id_int)
-                                if channel:
-                                    try:
-                                        message = await channel.fetch_message(int(message_id))
-                                        await message.delete()
-                                        print(f"メッセージを削除しました: {message_id} in {channel_id_int}")
-                                    except discord.NotFound:
-                                        print(f"メッセージが見つかりません: {message_id}")
-                                    except discord.Forbidden:
-                                        print(f"メッセージの削除権限がありません: {message_id}")
-                                    except Exception as e:
-                                        print(f"メッセージ削除中にエラーが発生しました: {e}")
+                                
+                                # 通常のチャンネルかDMチャンネルを取得
+                                if is_private:
+                                    # DMチャンネルの場合
+                                    user = await self.original_interaction.client.fetch_user(post_user_id)
+                                    if user:
+                                        try:
+                                            dm_channel = user.dm_channel or await user.create_dm()
+                                            message = await dm_channel.fetch_message(int(message_id))
+                                            await message.delete()
+                                            print(f"DMメッセージを削除しました: {message_id} (User: {user.id})")
+                                        except discord.NotFound:
+                                            print(f"DMメッセージが見つかりません: {message_id}")
+                                        except discord.Forbidden:
+                                            print(f"DMメッセージの削除権限がありません: {message_id}")
+                                        except Exception as e:
+                                            print(f"DMメッセージ削除中にエラーが発生しました: {e}")
+                                else:
+                                    # 通常のチャンネルの場合
+                                    channel = self.original_interaction.client.get_channel(channel_id_int)
+                                    if channel:
+                                        try:
+                                            message = await channel.fetch_message(int(message_id))
+                                            await message.delete()
+                                            print(f"チャンネルメッセージを削除しました: {message_id} in {channel_id_int}")
+                                        except discord.NotFound:
+                                            print(f"チャンネルメッセージが見つかりません: {message_id}")
+                                        except discord.Forbidden:
+                                            print(f"チャンネルメッセージの削除権限がありません: {message_id}")
+                                        except Exception as e:
+                                            print(f"チャンネルメッセージ削除中にエラーが発生しました: {e}")
                         except Exception as e:
-                            print(f"チャンネル取得/メッセージ削除中にエラーが発生しました: {e}")
+                            print(f"メッセージ削除処理中にエラーが発生しました: {e}")
                         
                         embed = discord.Embed(
                             title="🗑️ 投稿を削除しました",

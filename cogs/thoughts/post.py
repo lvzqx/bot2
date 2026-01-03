@@ -152,11 +152,21 @@ class Post(commands.Cog):
                             # 非公開の場合はDMに送信
                             dm_channel = await interaction.user.create_dm()
                             dm_embed = discord.Embed(
-                                title='🔒 非公開メッセージ',
                                 description=content,
                                 color=discord.Color.blue()
                             )
-                            dm_embed.set_footer(text=f'カテゴリー: {category} | ID: {post_id}')
+                            
+                            # 投稿者情報を設定
+                            if not is_anonymous:
+                                dm_embed.set_author(
+                                    name=interaction.user.display_name,
+                                    icon_url=str(interaction.user.display_avatar.url)
+                                )
+                            else:
+                                dm_embed.set_author(name='匿名')
+                            
+                            # フッターにカテゴリーと投稿IDを表示
+                            dm_embed.set_footer(text=f'カテゴリー: {category} | ID: {post_id} | 非公開')
                             message = await dm_channel.send(embed=dm_embed)
                             
                             # 確認メッセージを更新
