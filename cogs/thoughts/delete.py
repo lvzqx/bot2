@@ -56,14 +56,18 @@ class Delete(commands.Cog):
         try:
             print(f"[DEBUG] 削除コマンド受信: {message.content}")
             
-            # 投稿IDを取得
-            parts = message.content.split()
-            if len(parts) < 2:
-                print("[ERROR] 投稿IDが指定されていません")
-                await message.channel.send("❌ 投稿IDを指定してください。例: `/delete 123`", delete_after=10)
+            # 投稿IDを取得（コマンド形式: /delete 123 または delete 123）
+            content = message.content.strip()
+            parts = content.split()
+            
+            # コマンド形式をチェック
+            if len(parts) != 2 or not parts[1].isdigit():
+                print(f"[ERROR] 無効なコマンド形式: {content}")
+                help_msg = "```\n使い方:\n  /delete [投稿ID]\n  \n例: /delete 123\n```"
+                await message.channel.send(help_msg, delete_after=15)
                 return
                 
-            post_id = parts[1].strip()
+            post_id = int(parts[1])
             print(f"[DEBUG] 抽出した投稿ID: {post_id}")
             
             if not post_id.isdigit():
