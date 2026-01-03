@@ -124,84 +124,117 @@ class Delete(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         
         try:
-            # 投稿の存在確認と情報取得
-            cursor = self.bot.db.cursor()
-            cursor.execute('''
-                SELECT user_id, is_private, is_anonymous, content, category
-                FROM thoughts 
-                WHERE id = ?
-            ''', (post_id,))
+            print(f"[DEBUG] 削除リクエスト受信 - ユーザーID: {interaction.user.id}, 投稿ID: {post_id}")
             
-            post = cursor.fetchone()
-            
-            if not post:
-                await interaction.followup.send("❌ 指定された投稿が見つかりません。", ephemeral=True)
-                return
-            
-            post_user_id, is_private, is_anonymous, content, category = post
-            
-            # 権限チェック（投稿者本人または管理者のみ削除可能）
-            is_owner = post_user_id == interaction.user.id
-            is_admin = interaction.user.guild_permissions.administrator if interaction.guild else False
-            
-            if not (is_owner or is_admin):
-                await interaction.followup.send("❌ この投稿を削除する権限がありません。", ephemeral=True)
-                return
-            
-            # 非公開投稿の場合はDMからも削除
-            if is_private:
-                try:
-                    # 投稿者を取得
-                    user = self.bot.get_user(post_user_id)
-                    if user:
-                        # DMチャンネルを取得または作成
-                        dm_channel = user.dm_channel or await user.create_dm()
-                        
-                        # DM内のメッセージを検索して削除
-                        async for dm_message in dm_channel.history(limit=100):
-                            if dm_message.embeds and dm_message.embeds[0].footer:
-                                if f"ID: {post_id}" in str(dm_message.embeds[0].footer.text):
-                                    await dm_message.delete()
-                                    break
-                except Exception as e:
-                    print(f"DMメッセージ削除エラー: {e}")
-            else:
-                # 公開投稿の場合はチャンネルから削除
+            # データベーストランザクション開始
+            with self.bot.db:
+                cursor = self.bot.db.cursor()
+                
+                # 1. 投稿の存在確認と情報取得
+                cursor.execute('''
+                    SELECT user_id, is_private, is_anonymous, content, category
+                    FROM thoughts 
+                    WHERE id = ?
+                ''', (post_id,))
+                
+                post = cursor.fetchone()
+                
+                if not post:
+                    print(f"[DEBUG] 投稿が見つかりません - 投稿ID: {post_id}")
+                    await interaction.followup.send("❌ 指定された投稿が見つかりません。", ephemeral=True)
+                    return
+                
+                post_user_id, is_private, is_anonymous, content, category = post
+                
+                # 2. 権限チェック（投稿者本人または管理者のみ削除可能）
+                is_owner = post_user_id == interaction.user.id
+                is_admin = interaction.user.guild_permissions.administrator if interaction.guild else False
+                
+                if not (is_owner or is_admin):
+                    print(f"[DEBUG] 権限がありません - ユーザーID: {interaction.user.id}, 投稿者ID: {post_user_id}")
+                    await interaction.followup.send("❌ この投稿を削除する権限がありません。", ephemeral=True)
+                    return
+                
+                # 3. メッセージ参照を取得
                 cursor.execute('''
                     SELECT message_id, channel_id 
                     FROM message_references 
                     WHERE post_id = ?
                 ''', (post_id,))
+                msg_refs = cursor.fetchall()
                 
-                for message_id, channel_id in cursor.fetchall():
+                # 4. メッセージを削除
+                deleted_messages = 0
+                
+                # 非公開投稿の場合はDMからも削除
+                if is_private:
+                    try:
+                        # 投稿者を取得
+                        user = self.bot.get_user(post_user_id)
+                        if user:
+                            # DMチャンネルを取得または作成
+                            dm_channel = user.dm_channel or await user.create_dm()
+                            
+                            # DM内のメッセージを検索して削除
+                            async for dm_message in dm_channel.history(limit=100):
+                                if dm_message.embeds and dm_message.embeds[0].footer:
+                                    if f"ID: {post_id}" in str(dm_message.embeds[0].footer.text):
+                                        await dm_message.delete()
+                                        deleted_messages += 1
+                                        break
+                    except Exception as e:
+                        print(f"[ERROR] DMメッセージ削除エラー: {e}")
+                
+                # 公開投稿の場合はチャンネルから削除
+                for message_id, channel_id in msg_refs:
                     try:
                         channel = self.bot.get_channel(channel_id)
                         if channel:
                             message = await channel.fetch_message(message_id)
                             if message:
                                 await message.delete()
+                                deleted_messages += 1
+                    except discord.NotFound:
+                        print(f"[DEBUG] メッセージは既に削除されています - メッセージID: {message_id}")
                     except Exception as e:
-                        print(f"メッセージ削除エラー: {e}")
+                        print(f"[ERROR] メッセージ削除エラー: {e}")
+                
+                # 5. メッセージ参照を削除
+                cursor.execute('''
+                    DELETE FROM message_references 
+                    WHERE post_id = ?
+                ''', (post_id,))
+                
+                # 6. 投稿を削除
+                cursor.execute('''
+                    DELETE FROM thoughts 
+                    WHERE id = ?
+                ''', (post_id,))
+                
+                print(f"[DEBUG] 削除完了 - 投稿ID: {post_id}, 削除メッセージ数: {deleted_messages}")
             
-            # メッセージ参照を削除
-            cursor.execute('''
-                DELETE FROM message_references 
-                WHERE post_id = ?
-            ''', (post_id,))
-            
-            # 投稿を削除
-            cursor.execute('''
-                DELETE FROM thoughts 
-                WHERE id = ?
-            ''', (post_id,))
-            
-            self.bot.db.commit()
-            
-            await interaction.followup.send(f"✅ 投稿 (ID: {post_id}) を削除しました", ephemeral=True)
+            await interaction.followup.send(
+                f"✅ 投稿 (ID: {post_id}) を削除しました\n"
+                f"- 削除されたメッセージ: {deleted_messages}件",
+                ephemeral=True
+            )
             
         except Exception as e:
-            print(f"[ERROR] 削除処理中にエラー: {e}")
-            await interaction.followup.send("❌ 投稿の削除中にエラーが発生しました。", ephemeral=True)
+            error_msg = f"[ERROR] 削除処理中にエラー: {type(e).__name__}: {e}"
+            print(error_msg)
+            import traceback
+            traceback.print_exc()
+            
+            try:
+                self.bot.db.rollback()
+            except:
+                pass
+                
+            await interaction.followup.send(
+                "❌ 投稿の削除中にエラーが発生しました。\n"
+                "しばらくしてから再度お試しください。",
+                ephemeral=True
+            )
 
 async def setup(bot):
     await bot.add_cog(Delete(bot))
