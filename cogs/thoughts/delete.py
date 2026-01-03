@@ -163,14 +163,29 @@ class Delete(commands.Cog):
                 ''', (post_id,))
                 msg_refs = cursor.fetchall()
                 print(f"[DEBUG] メッセージ参照を取得しました - 参照数: {len(msg_refs)}")
-                for ref in msg_refs:
-                    print(f"[DEBUG] メッセージ参照 - メッセージID: {ref[0]}, チャンネルID: {ref[1]}")
                 
-                # メッセージ参照が空の場合はデータベースを確認
+                # メッセージ参照が空の場合は、thoughtsテーブルから直接チャンネルIDを取得
                 if not msg_refs:
                     print(f"[WARNING] メッセージ参照が存在しません - 投稿ID: {post_id}")
-                    # 念のため、直接メッセージを検索するために空のリストを設定
-                    msg_refs = [(0, 0)]  # ダミーの参照を追加して処理を継続
+                    
+                    # thoughtsテーブルからチャンネルIDを取得
+                    cursor.execute('''
+                        SELECT channel_id, is_private 
+                        FROM thoughts 
+                        WHERE id = ?
+                    ''', (post_id,))
+                    thought_data = cursor.fetchone()
+                    
+                    if thought_data:
+                        channel_id, is_private_thought = thought_data
+                        if not is_private_thought and channel_id:  # 公開投稿の場合
+                            print(f"[DEBUG] thoughtsテーブルからチャンネルIDを取得しました: {channel_id}")
+                            # メッセージIDが不明な場合は、チャンネルの履歴を検索
+                            msg_refs = [(0, channel_id)]
+                
+                # デバッグ用に参照情報を表示
+                for ref in msg_refs:
+                    print(f"[DEBUG] メッセージ参照 - メッセージID: {ref[0]}, チャンネルID: {ref[1]}")
                 
                 # 4. メッセージを削除
                 deleted_messages = 0
@@ -312,26 +327,58 @@ class Delete(commands.Cog):
                 # 公開投稿の場合はチャンネルから削除
                 for message_id, channel_id in msg_refs:
                     try:
+                        if channel_id == 0:  # チャンネルIDが無効な場合はスキップ
+                            continue
+                            
                         channel = self.bot.get_channel(channel_id)
-                        if channel:
-                            print(f"[DEBUG] チャンネルからメッセージを削除します - チャンネルID: {channel_id}, メッセージID: {message_id}")
+                        if not channel:
+                            print(f"[WARNING] チャンネルが見つかりません - チャンネルID: {channel_id}")
+                            continue
+                            
+                        print(f"[DEBUG] チャンネルからメッセージを削除します - チャンネルID: {channel_id}, メッセージID: {message_id}")
+                        
+                        # メッセージIDが有効な場合
+                        if message_id > 0:
                             if await try_delete_message(channel, message_id):
                                 deleted_messages += 1
+                                continue
                             else:
                                 print(f"[WARNING] メッセージの削除に失敗しました - チャンネルID: {channel_id}, メッセージID: {message_id}")
-                                
-                                # メッセージが見つからない場合、チャンネルの履歴を検索
+                        
+                        # メッセージIDが無効な場合や削除に失敗した場合は、チャンネルの履歴を検索
+                        try:
+                            print(f"[DEBUG] チャンネルの履歴を検索します - チャンネルID: {channel_id}")
+                            found = False
+                            async for message in channel.history(limit=200):
                                 try:
-                                    print(f"[DEBUG] チャンネルの履歴を検索します - チャンネルID: {channel_id}")
-                                    async for message in channel.history(limit=200):
-                                        if message.id == message_id:
-                                            print(f"[DEBUG] 履歴からメッセージを削除します - メッセージID: {message_id}")
-                                            await message.delete()
-                                            deleted_messages += 1
-                                            print(f"[DEBUG] 履歴からメッセージを削除しました - メッセージID: {message_id}")
-                                            break
+                                    # メッセージIDが一致するか、埋め込みメッセージのフッターに投稿IDが含まれているか確認
+                                    message_matches = (
+                                        (message_id > 0 and message.id == message_id) or
+                                        (message.embeds and 
+                                         len(message.embeds) > 0 and 
+                                         message.embeds[0].footer and 
+                                         f"ID: {post_id}" in str(message.embeds[0].footer.text))
+                                    )
+                                    
+                                    if message_matches:
+                                        print(f"[DEBUG] 履歴からメッセージを削除します - メッセージID: {message.id}")
+                                        await message.delete()
+                                        deleted_messages += 1
+                                        found = True
+                                        print(f"[DEBUG] 履歴からメッセージを削除しました - メッセージID: {message.id}")
+                                        break
                                 except Exception as e:
-                                    print(f"[ERROR] チャンネル履歴の検索中にエラー: {type(e).__name__}: {e}")
+                                    print(f"[ERROR] メッセージ処理中にエラー: {type(e).__name__}: {e}")
+                                    continue
+                                    
+                            if not found:
+                                print(f"[WARNING] メッセージが見つかりませんでした - チャンネルID: {channel_id}, 投稿ID: {post_id}")
+                                
+                        except Exception as e:
+                            print(f"[ERROR] チャンネル履歴の検索中にエラー: {type(e).__name__}: {e}")
+                            import traceback
+                            traceback.print_exc()
+                            
                     except Exception as e:
                         print(f"[ERROR] チャンネル処理中にエラー (チャンネルID: {channel_id}): {type(e).__name__}: {e}")
                         import traceback
