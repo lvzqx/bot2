@@ -2,6 +2,12 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from datetime import datetime
+import os
+import sys
+
+# Add the project root to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import DEFAULT_AVATAR
 
 class Post(commands.Cog):
     def __init__(self, bot):
@@ -158,7 +164,7 @@ class Post(commands.Cog):
                                 
                                 # 表示名を設定
                                 if is_anonymous:
-                                    dm_embed.set_author(name='匿名')
+                                    dm_embed.set_author(name='匿名', icon_url=DEFAULT_AVATAR)
                                 else:
                                     dm_embed.set_author(
                                         name=interaction.user.display_name,
@@ -199,7 +205,7 @@ class Post(commands.Cog):
                                     icon_url=str(interaction.user.display_avatar.url)
                                 )
                             else:
-                                channel_embed.set_author(name='匿名')
+                                channel_embed.set_author(name='匿名', icon_url=DEFAULT_AVATAR)
                             
                             # フッターにカテゴリーと投稿IDを表示（時間は表示しない）
                             footer_text = f'カテゴリー: {category} | ID: {post_id}'
