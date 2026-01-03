@@ -15,11 +15,12 @@ class Post(commands.Cog):
             
             # メッセージ入力
             self.content = discord.ui.TextInput(
-                label='メッセージ',
-                style=discord.TextStyle.paragraph,
+                label='メッセージ (最大2000文字)',
+                style=discord.TextStyle.long,
                 placeholder='メッセージを入力してください...',
                 required=True,
-                max_length=1000
+                max_length=2000,
+                min_length=1
             )
             self.add_item(self.content)
             
@@ -77,8 +78,8 @@ class Post(commands.Cog):
                 if not content or len(content.strip()) == 0:
                     raise ValueError('メッセージを入力してください。')
                     
-                if len(content) > 1000:
-                    raise ValueError('メッセージは1000文字以内で入力してください。')
+                if len(content) > 2000:
+                    raise ValueError('メッセージは2000文字以内で入力してください。')
                 
                 # データベーストランザクション開始
                 cursor = self.bot.db.cursor()
