@@ -50,86 +50,93 @@ class Edit(commands.Cog):
                 
                 await interaction.response.defer(ephemeral=True)
                 
-                # データベースを更新
-                cursor = self.bot.db.cursor()
-                cursor.execute('''
-                    UPDATE thoughts 
-                    SET content = ?, category = ?, updated_at = ?
-                    WHERE id = ? AND user_id = ?
-                    RETURNING image_url, is_private, is_anonymous
-                ''', (
-                    self.content.value.strip(),
-                    self.category.value.strip(),
-                    datetime.now().isoformat(),
-                    self.post_id,
-                    interaction.user.id
-                ))
-                
-                result = cursor.fetchone()
-                
-                if not result:
-                    # 投稿が見つからないか権限がない場合
-                    cursor.execute('SELECT id FROM thoughts WHERE id = ?', (self.post_id,))
-                    if not cursor.fetchone():
-                        await interaction.followup.send("❌ 投稿が見つかりません。既に削除されている可能性があります。", ephemeral=True)
-                    else:
-                        await interaction.followup.send("❌ 編集に失敗しました。自分の投稿のみ編集できます。", ephemeral=True)
-                    return
+                try:
+                    # データベースを更新
+                    cursor = self.bot.db.cursor()
+                    cursor.execute('''
+                        UPDATE thoughts 
+                        SET content = ?, category = ?, updated_at = ?
+                        WHERE id = ? AND user_id = ?
+                        RETURNING image_url, is_private, is_anonymous
+                    ''', (
+                        self.content.value.strip(),
+                        self.category.value.strip(),
+                        datetime.now().isoformat(),
+                        self.post_id,
+                        interaction.user.id
+                    ))
                     
-                self.bot.db.commit()
-                
-                # 編集完了メッセージ
-                image_url, is_private, is_anonymous = result
-                embed = discord.Embed(
-                    title="✅ 投稿を更新しました",
-                    description=f"`ID: {self.post_id}` の投稿を更新しました。",
-                    color=discord.Color.green()
-                )
-                
-                # 画像があれば表示
-                if image_url:
-                    embed.set_image(url=image_url)
-                
-                # 編集内容のプレビュー
-                preview_content = self.content.value[:100] + ('...' if len(self.content.value) > 100 else '')
-                embed.add_field(
-                    name="更新内容",
-                    value=f"**カテゴリー:** {self.category.value}\n"
-                          f"**内容:** {preview_content}",
-                    inline=False
-                )
-                
-                # ステータスを表示
-                status = []
-                if is_private:
-                    status.append("🔒 非公開")
-                if is_anonymous:
-                    status.append("👤 匿名")
-                
-                if status:
+                    result = cursor.fetchone()
+                    
+                    if not result:
+                        # 投稿が見つからないか権限がない場合
+                        cursor.execute('SELECT id FROM thoughts WHERE id = ?', (self.post_id,))
+                        if not cursor.fetchone():
+                            await interaction.followup.send("❌ 投稿が見つかりません。既に削除されている可能性があります。", ephemeral=True)
+                        else:
+                            await interaction.followup.send("❌ 編集に失敗しました。自分の投稿のみ編集できます。", ephemeral=True)
+                        return
+                        
+                    self.bot.db.commit()
+                    
+                    # 編集完了メッセージ
+                    image_url, is_private, is_anonymous = result
+                    embed = discord.Embed(
+                        title="✅ 投稿を更新しました",
+                        description=f"`ID: {self.post_id}` の投稿を更新しました。",
+                        color=discord.Color.green()
+                    )
+                    
+                    # 画像があれば表示
+                    if image_url:
+                        embed.set_image(url=image_url)
+                    
+                    # 編集内容のプレビュー
+                    preview_content = self.content.value[:100] + ('...' if len(self.content.value) > 100 else '')
                     embed.add_field(
-                        name="ステータス",
-                        value=" | ".join(status),
+                        name="更新内容",
+                        value=f"**カテゴリー:** {self.category.value}\n"
+                              f"**内容:** {preview_content}",
                         inline=False
                     )
-                
-                # 編集ボタンを追加
-                view = discord.ui.View(timeout=180)
-                view.add_item(discord.ui.Button(
-                    label="この投稿を表示",
-                    style=discord.ButtonStyle.link,
-                    url=f"https://discord.com/channels/{interaction.guild.id}/{interaction.channel.id}/{self.post_id}"
-                ))
-                
-                await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+                    
+                    # ステータスを表示
+                    status = []
+                    if is_private:
+                        status.append("🔒 非公開")
+                    if is_anonymous:
+                        status.append("👤 匿名")
+                    
+                    if status:
+                        embed.add_field(
+                            name="ステータス",
+                            value=" | ".join(status),
+                            inline=False
+                        )
+                    
+                    # 編集ボタンを追加
+                    view = discord.ui.View(timeout=180)
+                    view.add_item(discord.ui.Button(
+                        label="この投稿を表示",
+                        style=discord.ButtonStyle.link,
+                        url=f"https://discord.com/channels/{interaction.guild.id}/{interaction.channel.id}/{self.post_id}"
+                    ))
+                    
+                    await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+                    
+                except Exception as db_error:
+                    self.bot.db.rollback()
+                    error_msg = f"データベースエラー: {str(db_error)}"
+                    print(f"Database Error in EditModal: {error_msg}")
+                    await interaction.followup.send(f"❌ データの更新中にエラーが発生しました: {str(db_error)}", ephemeral=True)
                 
             except Exception as e:
-                error_msg = f"エラーが発生しました: {str(e)}"
-                print(f"Edit Error: {error_msg}")
+                error_msg = f"予期せぬエラーが発生しました: {str(e)}\n```{type(e).__name__}```"
+                print(f"Unexpected Error in EditModal: {error_msg}")
                 if not interaction.response.is_done():
-                    await interaction.response.send_message("❌ エラーが発生しました。もう一度お試しください。", ephemeral=True)
+                    await interaction.response.send_message(f"❌ エラーが発生しました: {str(e)}\nタイプ: {type(e).__name__}", ephemeral=True)
                 else:
-                    await interaction.followup.send("❌ エラーが発生しました。もう一度お試しください。", ephemeral=True)
+                    await interaction.followup.send(f"❌ エラーが発生しました: {str(e)}\nタイプ: {type(e).__name__}", ephemeral=True)
 
     class PostSelect(discord.ui.Select):
         def __init__(self, posts):
