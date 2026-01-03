@@ -62,7 +62,7 @@ class Delete(commands.Cog):
                 await message.channel.send(help_msg, delete_after=15)
                 return
                 
-            post_id = int(parts[1])
+            post_id = int(parts[-1])  # 最後の引数を投稿IDとして使用
             user_id = message.author.id
             print(f"[DEBUG] ユーザーID: {user_id}, 削除対象投稿ID: {post_id}")
             
