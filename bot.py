@@ -132,55 +132,38 @@ async def sync(ctx):
 # ヘルプコマンド（スラッシュコマンドのみ）
 @bot.tree.command(name='help', description='利用可能なコマンドを表示します')
 async def help_command(interaction: discord.Interaction):
-    # 即座に応答を返す
-    await interaction.response.defer(ephemeral=True)
-    
-    # エフェラルメッセージとして送信
-    embed = discord.Embed(
-        title='📚 利用可能なコマンド',
-        description='以下のコマンドが利用できます。',
-        color=discord.Color.blue()
-    )
-    
-    # コマンドの説明
-    embed.add_field(
-        name='📝 投稿関連',
-        value='''
-        `/post` - 新しい投稿を作成
-        `/list [件数]` - 自分の投稿を一覧表示（デフォルト10件）
-        `/search [キーワード]` - 投稿を検索
-        `/delete [ID]` - 投稿を削除
-        `/edit [ID]` - 投稿を編集
-        ''',
-        inline=False
-    )
-    
-    # 管理コマンドの説明
-    if await bot.is_owner(ctx.author):
-        embed.add_field(
-            name='⚙️ 管理コマンド',
-            value='`!sync` - コマンドを同期（ボットオーナーのみ）',
-            inline=False
-        )
-    
-    embed.set_footer(text='各コマンドの詳細は /help コマンド名 で確認できます。')
-    
     try:
-        # スラッシュコマンドの場合
-        if hasattr(ctx, 'response'):
-            await ctx.response.send_message(embed=embed, ephemeral=True)
-        # プレフィックスコマンドの場合
-        elif hasattr(ctx, 'send'):
-            await ctx.send(embed=embed, ephemeral=True)
-        # その他の場合（念のため）
-        else:
-            await ctx.send(embed=embed)
+        # シンプルな応答を即座に返す
+        embed = discord.Embed(
+            title='📚 利用可能なコマンド',
+            description='以下のコマンドが利用できます。',
+            color=discord.Color.blue()
+        )
+        
+        # コマンドの説明を追加
+        commands_list = [
+            ('📝 投稿関連', '''
+            `/post` - 新しい投稿を作成
+            `/list [件数]` - 自分の投稿を一覧表示（デフォルト10件）
+            `/search [キーワード]` - 投稿を検索
+            `/delete [ID]` - 投稿を削除
+            `/edit [ID]` - 投稿を編集
+            ''')
+        ]
+        
+        for name, value in commands_list:
+            embed.add_field(name=name, value=value, inline=False)
+        
+        # 一度の応答で送信
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        
     except Exception as e:
         print(f"Help command error: {e}")
         try:
-            await ctx.send("ヘルプメッセージの送信中にエラーが発生しました。", ephemeral=True)
+            await interaction.response.send_message("ヘルプの表示中にエラーが発生しました。", ephemeral=True)
         except:
             pass
+    return
 
 # ボットを実行
 async def main():
