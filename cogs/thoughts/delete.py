@@ -170,14 +170,28 @@ class Delete(commands.Cog):
                 async def try_delete_message(channel, message_id, is_dm=False):
                     for attempt in range(max_retries):
                         try:
-                            message = await channel.fetch_message(message_id)
-                            if message:
-                                await message.delete()
-                                print(f"[DEBUG] {'DM' if is_dm else 'チャンネル'}メッセージを削除しました - メッセージID: {message_id}")
-                                return True
-                        except discord.NotFound:
-                            print(f"[DEBUG] メッセージは既に削除されています - メッセージID: {message_id}")
+                            # メッセージを直接取得
+                            try:
+                                message = await channel.fetch_message(message_id)
+                                if message:
+                                    await message.delete()
+                                    print(f"[DEBUG] メッセージを削除しました (直接取得) - メッセージID: {message_id}")
+                                    return True
+                            except discord.NotFound:
+                                print(f"[DEBUG] メッセージは既に削除されています - メッセージID: {message_id}")
+                                return False
+                                
+                            # メッセージが削除されていないが、取得できない場合は履歴を検索
+                            print(f"[DEBUG] メッセージを直接取得できませんでした。履歴を検索します - メッセージID: {message_id}")
+                            async for msg in channel.history(limit=200):
+                                if msg.id == message_id:
+                                    await msg.delete()
+                                    print(f"[DEBUG] 履歴からメッセージを削除しました - メッセージID: {message_id}")
+                                    return True
+                            
+                            print(f"[WARNING] メッセージが見つかりませんでした - メッセージID: {message_id}")
                             return False
+                            
                         except discord.Forbidden:
                             print(f"[ERROR] メッセージ削除の権限がありません - メッセージID: {message_id}")
                             return False
@@ -197,36 +211,65 @@ class Delete(commands.Cog):
                                 # DMチャンネルを取得または作成
                                 dm_channel = user.dm_channel or await user.create_dm()
                                 
-                                # DM内のメッセージを検索して削除
+                                # DM内のメッセージを検索して削除（より広範に検索）
+                                found = False
                                 async for dm_message in dm_channel.history(limit=200):
                                     try:
-                                        if (dm_message.author == self.bot.user and 
-                                            dm_message.embeds and 
-                                            len(dm_message.embeds) > 0 and 
-                                            dm_message.embeds[0].footer and 
-                                            f"ID: {post_id}" in str(dm_message.embeds[0].footer.text)):
+                                        # メッセージIDが一致するか、埋め込みメッセージのフッターに投稿IDが含まれているか確認
+                                        if (dm_message.id in [ref[0] for ref in msg_refs] or 
+                                            (dm_message.embeds and 
+                                             len(dm_message.embeds) > 0 and 
+                                             dm_message.embeds[0].footer and 
+                                             f"ID: {post_id}" in str(dm_message.embeds[0].footer.text))):
                                             
+                                            print(f"[DEBUG] 削除対象のDMメッセージを検出 - メッセージID: {dm_message.id}")
                                             if await try_delete_message(dm_channel, dm_message.id, is_dm=True):
                                                 deleted_messages += 1
-                                            break
-                                            
+                                                found = True
+                                                break
                                     except Exception as e:
                                         print(f"[ERROR] DMメッセージ処理中にエラー: {type(e).__name__}: {e}")
                                         continue
+                                
+                                if not found:
+                                    print(f"[WARNING] DM内で削除対象のメッセージが見つかりませんでした - 投稿ID: {post_id}")
+                                    
                             except Exception as e:
                                 print(f"[ERROR] DMチャンネル処理中にエラー: {type(e).__name__}: {e}")
+                                import traceback
+                                traceback.print_exc()
                     except Exception as e:
                         print(f"[ERROR] ユーザー取得中にエラー: {type(e).__name__}: {e}")
+                        import traceback
+                        traceback.print_exc()
                 
                 # 公開投稿の場合はチャンネルから削除
                 for message_id, channel_id in msg_refs:
                     try:
                         channel = self.bot.get_channel(channel_id)
                         if channel:
+                            print(f"[DEBUG] チャンネルからメッセージを削除します - チャンネルID: {channel_id}, メッセージID: {message_id}")
                             if await try_delete_message(channel, message_id):
                                 deleted_messages += 1
+                            else:
+                                print(f"[WARNING] メッセージの削除に失敗しました - チャンネルID: {channel_id}, メッセージID: {message_id}")
+                                
+                                # メッセージが見つからない場合、チャンネルの履歴を検索
+                                try:
+                                    print(f"[DEBUG] チャンネルの履歴を検索します - チャンネルID: {channel_id}")
+                                    async for message in channel.history(limit=200):
+                                        if message.id == message_id:
+                                            print(f"[DEBUG] 履歴からメッセージを削除します - メッセージID: {message_id}")
+                                            await message.delete()
+                                            deleted_messages += 1
+                                            print(f"[DEBUG] 履歴からメッセージを削除しました - メッセージID: {message_id}")
+                                            break
+                                except Exception as e:
+                                    print(f"[ERROR] チャンネル履歴の検索中にエラー: {type(e).__name__}: {e}")
                     except Exception as e:
                         print(f"[ERROR] チャンネル処理中にエラー (チャンネルID: {channel_id}): {type(e).__name__}: {e}")
+                        import traceback
+                        traceback.print_exc()
                 
                 # 5. メッセージ参照を削除
                 cursor.execute('''
