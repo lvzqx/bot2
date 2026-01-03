@@ -62,56 +62,71 @@ class Delete(commands.Cog):
             print(f"[DEBUG] ユーザーID: {user_id}, 削除対象投稿ID: {post_id}")
             
             try:
-                # メッセージ参照を取得
                 cursor = self.bot.db.cursor()
+                
+                # 1. 投稿の存在確認
+                cursor.execute('''
+                    SELECT id, is_private FROM thoughts 
+                    WHERE id = ? AND user_id = ?
+                ''', (post_id, user_id))
+                
+                post = cursor.fetchone()
+                print(f"[DEBUG] 投稿確認: {post}")
+                
+                if not post:
+                    await message.channel.send("❌ 投稿が見つからないか、削除する権限がありません。", delete_after=10)
+                    return
+                    
+                if not post[1]:  # is_privateが0（公開投稿）の場合
+                    await message.channel.send("❌ この投稿は公開されています。サーバーで `/delete" + 
+                                            f" {post_id}` を使用してください。", delete_after=15)
+                    return
+                
+                # 2. メッセージ参照を取得
                 cursor.execute('''
                     SELECT message_id, channel_id FROM message_references 
                     WHERE post_id = ?
                 ''', (post_id,))
-                
                 msg_ref = cursor.fetchone()
                 print(f"[DEBUG] メッセージ参照: {msg_ref}")
                 
-                # 投稿の存在確認と削除
+                # 3. 投稿を削除
                 cursor.execute('''
                     DELETE FROM thoughts 
-                    WHERE id = ? AND user_id = ? AND is_private = 1
-                    RETURNING id
+                    WHERE id = ? AND user_id = ?
                 ''', (post_id, user_id))
                 
-                deleted = cursor.fetchone()
-                print(f"[DEBUG] 削除されたレコード: {deleted}")
-                
-                if deleted:
-                    # メッセージ参照を削除
+                # メッセージ参照があれば削除
+                if msg_ref:
                     cursor.execute('DELETE FROM message_references WHERE post_id = ?', (post_id,))
-                    self.bot.db.commit()
-                    print("[DEBUG] データベースから削除完了")
-                    
-                    # 埋め込みメッセージを削除
-                    if msg_ref:
-                        try:
-                            message_id, channel_id = msg_ref
-                            print(f"[DEBUG] メッセージ削除を試みます: message_id={message_id}, channel_id={channel_id}")
-                            
-                            channel = self.bot.get_channel(int(channel_id))
-                            if channel:
-                                print(f"[DEBUG] チャンネルを取得: {channel}")
+                
+                self.bot.db.commit()
+                print("[DEBUG] データベースから削除完了")
+                
+                # 埋め込みメッセージを削除
+                if msg_ref:
+                    try:
+                        message_id, channel_id = msg_ref
+                        print(f"[DEBUG] メッセージ削除を試みます: message_id={message_id}, channel_id={channel_id}")
+                        
+                        channel = self.bot.get_channel(int(channel_id))
+                        if channel:
+                            print(f"[DEBUG] チャンネルを取得: {channel}")
+                            try:
                                 msg = await channel.fetch_message(int(message_id))
                                 if msg:
                                     print("[DEBUG] メッセージを削除します")
                                     await msg.delete()
                                     print("[DEBUG] メッセージ削除完了")
-                        except discord.NotFound:
-                            print("[DEBUG] メッセージは既に削除されています")
-                        except Exception as e:
-                            print(f"[ERROR] メッセージ削除エラー: {type(e).__name__}: {e}")
-                    
-                    print("[DEBUG] 完了メッセージを送信")
-                    await message.channel.send(f"✅ 非公開投稿 (ID: {post_id}) を削除しました")
-                else:
-                    print("[DEBUG] 削除対象の投稿が見つかりませんでした")
-                    await message.channel.send("❌ 削除できる非公開投稿が見つかりませんでした", delete_after=10)
+                            except discord.NotFound:
+                                print("[DEBUG] メッセージは既に削除されています")
+                            except Exception as e:
+                                print(f"[ERROR] メッセージ削除エラー: {type(e).__name__}: {e}")
+                    except Exception as e:
+                        print(f"[ERROR] メッセージ削除処理中にエラーが発生: {type(e).__name__}: {e}")
+                
+                print("[DEBUG] 完了メッセージを送信")
+                await message.channel.send(f"✅ 非公開投稿 (ID: {post_id}) を削除しました")
                     
             except Exception as db_error:
                 print(f"[ERROR] データベースエラー: {type(db_error).__name__}: {db_error}")
