@@ -242,7 +242,7 @@ class Edit(commands.Cog):
             # 選択された投稿を取得
             cursor = self.view.cog.bot.db.cursor()
             cursor.execute('''
-                SELECT content, category, user_id, is_private, is_anonymous
+                SELECT content, category, image_url, is_anonymous, is_private, user_id
                 FROM thoughts 
                 WHERE id = ? AND user_id = ?
             ''', (post_id, interaction.user.id))
@@ -256,14 +256,17 @@ class Edit(commands.Cog):
                     await interaction.followup.send("❌ 投稿が見つからないか、編集権限がありません。", ephemeral=True)
                 return
             
-            current_content, current_category, _, _, _ = post
+            current_content, current_category, current_image_url, current_is_anonymous, current_is_private, _ = post
             
             # 編集モーダルを表示
             modal = self.view.cog.EditModal(
                 bot=self.view.cog.bot,
                 post_id=post_id,
                 current_content=current_content,
-                current_category=current_category
+                current_category=current_category,
+                current_image_url=current_image_url,
+                current_is_anonymous=bool(current_is_anonymous),
+                current_is_private=bool(current_is_private)
             )
             
             # モーダルを直接表示
