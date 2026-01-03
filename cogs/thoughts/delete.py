@@ -71,12 +71,22 @@ class Delete(commands.Cog):
                         # チャンネルメッセージを削除
                         try:
                             if message_id and channel_id:
-                                channel = self.original_interaction.client.get_channel(channel_id)
+                                # チャンネルIDを整数に変換
+                                channel_id_int = int(channel_id)
+                                channel = self.original_interaction.client.get_channel(channel_id_int)
                                 if channel:
-                                    message = await channel.fetch_message(message_id)
-                                    await message.delete()
+                                    try:
+                                        message = await channel.fetch_message(int(message_id))
+                                        await message.delete()
+                                        print(f"メッセージを削除しました: {message_id} in {channel_id_int}")
+                                    except discord.NotFound:
+                                        print(f"メッセージが見つかりません: {message_id}")
+                                    except discord.Forbidden:
+                                        print(f"メッセージの削除権限がありません: {message_id}")
+                                    except Exception as e:
+                                        print(f"メッセージ削除中にエラーが発生しました: {e}")
                         except Exception as e:
-                            print(f"メッセージ削除エラー: {e}")
+                            print(f"チャンネル取得/メッセージ削除中にエラーが発生しました: {e}")
                         
                         embed = discord.Embed(
                             title="🗑️ 投稿を削除しました",

@@ -47,95 +47,54 @@ class List(commands.Cog):
                 for i in range(0, len(posts), items_per_page):
                     embed = discord.Embed(
                         title=f"📋 {interaction.user.display_name} さんの投稿一覧",
-                        color=discord.Color.blue(),
-                        timestamp=datetime.now()
+                        description="削除するには `/delete 投稿ID` を使用してください。",
+                        color=discord.Color.blue()
                     )
                     
-                    page_posts = []
                     for post in posts[i:i + items_per_page]:
                         post_id, content, category, created_at, is_private, display_name = post
-                        created_at_dt = datetime.fromisoformat(created_at)
-                        created_at_str = created_at_dt.strftime('%Y-%m-%d %H:%M')
                         
                         # 内容が長すぎる場合は省略
                         display_content = content[:100] + '...' if len(content) > 100 else content
                         
-                        # 投稿者情報を設定
-                        is_anonymous = display_name is None
-                        author_name = "匿名" if is_anonymous else display_name
-                        
-                        # 投稿カード風の埋め込みメッセージを作成
-                        post_embed = discord.Embed(
-                            description=display_content,
-                            color=discord.Color.blue(),
-                            timestamp=created_at_dt
-                        )
-                        
-                        # 投稿者情報を設定（アバター付き）
-                        post_embed.set_author(
-                            name=author_name,
-                            icon_url=str(interaction.user.display_avatar.url) if not is_anonymous else None
-                        )
-                        
-                        # フッターにカテゴリーを表示
-                        footer_text = f"カテゴリー: {category}"
+                        # 投稿情報を追加
+                        field_value = f"{display_content}\n"
+                        field_value += f"カテゴリー: {category}\n"
                         if is_private:
-                            footer_text += " | 🔒 非公開"
-                        post_embed.set_footer(text=footer_text)
+                            field_value += "🔒 非公開\n"
                         
-                        # メインの埋め込みに追加（投稿IDのみを表示）
                         embed.add_field(
                             name=f"ID: {post_id}",
-                            value=f"{display_content}\n​",  # 改行と空行を追加
+                            value=field_value,
                             inline=False
                         )
-                        page_posts.append((post_id, post_embed))
                     
-                    embed.set_footer(text=f"ページ {i//items_per_page + 1}/{((len(posts)-1)//items_per_page) + 1}")
                     pages.append(embed)
-                    
-                    # 各投稿の詳細を別のページとして追加
-                    for post_id, post_embed in page_posts:
-                        pages.append(post_embed)
-                
-                if not pages:
-                    embed = discord.Embed(
-                        title="📭 表示できる投稿がありません",
-                        description="表示できる投稿が見つかりませんでした。",
-                        color=discord.Color.blue()
-                    )
-                    return await interaction.followup.send(embed=embed, ephemeral=True)
                 
                 # ページネーションで表示
-                current_page = 0
-                main_embed, post_embed = pages[current_page]
-                view = ListPaginationView(pages, current_page)
-                await interaction.followup.send(embed=main_embed, view=view)
-                # 投稿カードを別メッセージとして送信
-                await interaction.followup.send(embed=post_embed)
+                view = PaginationView(pages, 0)
+                await interaction.followup.send(embed=pages[0], view=view, ephemeral=True)
                 
             except Exception as e:
-                self.bot.db.rollback()
-                raise e
+                print(f"データベースエラー: {e}")
+                error_embed = discord.Embed(
+                    title="❌ エラー",
+                    description="投稿の取得中にエラーが発生しました。",
+                    color=discord.Color.red()
+                )
+                await interaction.followup.send(embed=error_embed, ephemeral=True)
                 
         except Exception as e:
-            error_embed = discord.Embed(
-                title='❌ エラー',
-                description=f'投稿一覧の取得中にエラーが発生しました: {str(e)}',
-                color=discord.Color.red()
-            )
-            try:
-                if not interaction.response.is_done():
-                    await interaction.response.send_message(embed=error_embed, ephemeral=True)
-                else:
-                    await interaction.followup.send(embed=error_embed, ephemeral=True)
-            except:
-                try:
-                    await interaction.user.send(embed=error_embed)
-                except:
-                    pass  # DMがブロックされている場合は無視
+            print(f"エラー: {e}")
+            if not interaction.response.is_done():
+                error_embed = discord.Embed(
+                    title="❌ エラー",
+                    description="コマンドの実行中にエラーが発生しました。",
+                    color=discord.Color.red()
+                )
+                await interaction.response.send_message(embed=error_embed, ephemeral=True)
 
-class ListPaginationView(discord.ui.View):
+class PaginationView(discord.ui.View):
     def __init__(self, pages, current_page):
         super().__init__(timeout=180)  # 3分でタイムアウト
         self.pages = pages
@@ -143,31 +102,39 @@ class ListPaginationView(discord.ui.View):
         self.update_buttons()
     
     def update_buttons(self):
-        self.first_page.disabled = self.current_page == 0
-        self.prev_page.disabled = self.current_page == 0
-        self.next_page.disabled = self.current_page == len(self.pages) - 1
-        self.last_page.disabled = self.current_page == len(self.pages) - 1
+        # すべてのボタンをクリア
+        self.clear_items()
+        
+        # 最初に戻るボタン
+        self.add_item(discord.ui.Button(style=discord.ButtonStyle.secondary, label='<<', custom_id='first', disabled=self.current_page == 0))
+        # 前へボタン
+        self.add_item(discord.ui.Button(style=discord.ButtonStyle.primary, label='<', custom_id='prev', disabled=self.current_page == 0))
+        # ページ表示
+        self.add_item(discord.ui.Button(style=discord.ButtonStyle.gray, label=f'{self.current_page + 1}/{len(self.pages)}', disabled=True))
+        # 次へボタン
+        self.add_item(discord.ui.Button(style=discord.ButtonStyle.primary, label='>', custom_id='next', disabled=self.current_page >= len(self.pages) - 1))
+        # 最後へボタン
+        self.add_item(discord.ui.Button(style=discord.ButtonStyle.secondary, label='>>', custom_id='last', disabled=self.current_page >= len(self.pages) - 1))
     
-    @discord.ui.button(emoji="⏪", style=discord.ButtonStyle.gray)
-    async def first_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_page = 0
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        # ボタンが押されたときの処理
+        if not interaction.data.get('custom_id'):
+            return False
+            
+        if interaction.data['custom_id'] == 'first':
+            self.current_page = 0
+        elif interaction.data['custom_id'] == 'prev':
+            if self.current_page > 0:
+                self.current_page -= 1
+        elif interaction.data['custom_id'] == 'next':
+            if self.current_page < len(self.pages) - 1:
+                self.current_page += 1
+        elif interaction.data['custom_id'] == 'last':
+            self.current_page = len(self.pages) - 1
+        
         self.update_buttons()
         await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
-    
-    @discord.ui.button(emoji="◀️", style=discord.ButtonStyle.gray)
-    async def prev_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self.current_page > 0:
-            self.current_page -= 1
-            self.update_buttons()
-            await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
-    
-    @discord.ui.button(emoji="▶️", style=discord.ButtonStyle.gray)
-    async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self.current_page < len(self.pages) - 1:
-            self.current_page += 1
-            self.update_buttons()
-            await interaction.response.edit_message(embed=self.pages[self.current_page], view=self)
-    
+        return False
     @discord.ui.button(emoji="⏩", style=discord.ButtonStyle.gray)
     async def last_page(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.current_page = len(self.pages) - 1
