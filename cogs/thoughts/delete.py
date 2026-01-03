@@ -172,32 +172,47 @@ class Delete(commands.Cog):
                         # 投稿者を取得
                         user = self.bot.get_user(post_user_id)
                         if user:
-                            # DMチャンネルを取得または作成
-                            dm_channel = user.dm_channel or await user.create_dm()
-                            
-                            # DM内のメッセージを検索して削除
-                            async for dm_message in dm_channel.history(limit=100):
-                                if dm_message.embeds and dm_message.embeds[0].footer:
-                                    if f"ID: {post_id}" in str(dm_message.embeds[0].footer.text):
-                                        await dm_message.delete()
-                                        deleted_messages += 1
-                                        break
+                            try:
+                                # DMチャンネルを取得または作成
+                                dm_channel = user.dm_channel or await user.create_dm()
+                                
+                                # DM内のメッセージを検索して削除
+                                async for dm_message in dm_channel.history(limit=100):
+                                    try:
+                                        if (dm_message.embeds and len(dm_message.embeds) > 0 and 
+                                            dm_message.embeds[0].footer and 
+                                            f"ID: {post_id}" in str(dm_message.embeds[0].footer.text)):
+                                            await dm_message.delete()
+                                            deleted_messages += 1
+                                            print(f"[DEBUG] DMメッセージを削除しました - メッセージID: {dm_message.id}")
+                                            break
+                                    except Exception as e:
+                                        print(f"[ERROR] DMメッセージ削除中にエラーが発生: {type(e).__name__}: {e}")
+                                        continue
+                            except Exception as e:
+                                print(f"[ERROR] DMチャンネル取得エラー: {type(e).__name__}: {e}")
                     except Exception as e:
-                        print(f"[ERROR] DMメッセージ削除エラー: {e}")
+                        print(f"[ERROR] ユーザー取得エラー: {type(e).__name__}: {e}")
                 
                 # 公開投稿の場合はチャンネルから削除
                 for message_id, channel_id in msg_refs:
                     try:
                         channel = self.bot.get_channel(channel_id)
                         if channel:
-                            message = await channel.fetch_message(message_id)
-                            if message:
-                                await message.delete()
-                                deleted_messages += 1
-                    except discord.NotFound:
-                        print(f"[DEBUG] メッセージは既に削除されています - メッセージID: {message_id}")
+                            try:
+                                message = await channel.fetch_message(message_id)
+                                if message:
+                                    await message.delete()
+                                    deleted_messages += 1
+                                    print(f"[DEBUG] チャンネルメッセージを削除しました - メッセージID: {message_id}, チャンネルID: {channel_id}")
+                            except discord.NotFound:
+                                print(f"[DEBUG] メッセージは既に削除されています - メッセージID: {message_id}")
+                            except discord.Forbidden:
+                                print(f"[ERROR] メッセージ削除の権限がありません - メッセージID: {message_id}")
+                            except Exception as e:
+                                print(f"[ERROR] メッセージ削除エラー (メッセージID: {message_id}): {type(e).__name__}: {e}")
                     except Exception as e:
-                        print(f"[ERROR] メッセージ削除エラー: {e}")
+                        print(f"[ERROR] チャンネル取得エラー (チャンネルID: {channel_id}): {type(e).__name__}: {e}")
                 
                 # 5. メッセージ参照を削除
                 cursor.execute('''
@@ -213,11 +228,18 @@ class Delete(commands.Cog):
                 
                 print(f"[DEBUG] 削除完了 - 投稿ID: {post_id}, 削除メッセージ数: {deleted_messages}")
             
-            await interaction.followup.send(
-                f"✅ 投稿 (ID: {post_id}) を削除しました\n"
-                f"- 削除されたメッセージ: {deleted_messages}件",
-                ephemeral=True
-            )
+            if deleted_messages > 0 or is_private:
+                await interaction.followup.send(
+                    f"✅ 投稿 (ID: {post_id}) を削除しました\n"
+                    f"- 削除されたメッセージ: {deleted_messages}件",
+                    ephemeral=True
+                )
+            else:
+                await interaction.followup.send(
+                    f"⚠️ 投稿 (ID: {post_id}) はデータベースから削除されましたが、\n"
+                    "メッセージが見つからなかったか、既に削除されています。",
+                    ephemeral=True
+                )
             
         except Exception as e:
             error_msg = f"[ERROR] 削除処理中にエラー: {type(e).__name__}: {e}"
@@ -227,12 +249,13 @@ class Delete(commands.Cog):
             
             try:
                 self.bot.db.rollback()
-            except:
-                pass
+                print("[DEBUG] データベーストランザクションをロールバックしました")
+            except Exception as rollback_error:
+                print(f"[ERROR] ロールバック中にエラーが発生: {type(rollback_error).__name__}: {rollback_error}")
                 
             await interaction.followup.send(
                 "❌ 投稿の削除中にエラーが発生しました。\n"
-                "しばらくしてから再度お試しください。",
+                "ボットのログを確認してください。",
                 ephemeral=True
             )
 
