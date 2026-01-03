@@ -155,18 +155,23 @@ class Post(commands.Cog):
                                     description=content,
                                     color=discord.Color.blue()
                                 )
-                                author_name = '匿名' if is_anonymous else interaction.user.display_name
-                                author_avatar = None if is_anonymous else str(interaction.user.display_avatar.url)
-                                dm_embed.set_author(name=author_name, icon_url=author_avatar)
                                 
-                                if category:
-                                    dm_embed.add_field(name="カテゴリー", value=category, inline=True)
+                                # 表示名を設定
+                                if is_anonymous:
+                                    dm_embed.set_author(name='匿名')
+                                else:
+                                    dm_embed.set_author(
+                                        name=interaction.user.display_name,
+                                        icon_url=str(interaction.user.display_avatar.url)
+                                    )
+                                
+                                # フッターにカテゴリーと投稿IDを表示
+                                footer_text = f'カテゴリー: {category} | ID: {post_id}'
+                                dm_embed.set_footer(text=footer_text)
                                 
                                 # 画像があれば追加
                                 if image_url:
                                     dm_embed.set_image(url=image_url)
-                                
-                                dm_embed.set_footer(text=f"ID: {post_id} | {now}")
                                 
                                 # 送信先のユーザーを取得
                                 user = interaction.user

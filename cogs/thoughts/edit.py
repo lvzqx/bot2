@@ -9,7 +9,7 @@ class Edit(commands.Cog):
         self.db = bot.db
 
     class EditModal(discord.ui.Modal):
-        def __init__(self, bot, post_id, current_content, current_category, *args, **kwargs):
+        def __init__(self, bot, post_id, current_content, current_category, current_image_url=None, current_is_anonymous=False, current_is_private=False, *args, **kwargs):
             self.bot = bot
             self.post_id = post_id
             super().__init__(title=f'投稿を編集 (ID: {post_id})', *args, **kwargs)
@@ -36,6 +36,35 @@ class Edit(commands.Cog):
                 min_length=1
             )
             self.add_item(self.category)
+            
+            # 画像URL入力フィールド
+            self.image_url = discord.ui.TextInput(
+                label='画像URL (削除する場合は空欄)',
+                default=current_image_url or '',
+                placeholder='画像のURLを入力...',
+                required=False
+            )
+            self.add_item(self.image_url)
+            
+            # 表示名設定
+            self.is_anonymous = discord.ui.TextInput(
+                label='表示名',
+                placeholder='名前を表示する場合は「表示」、匿名の場合は「匿名」と入力',
+                default='匿名' if current_is_anonymous else '表示',
+                required=True,
+                max_length=2
+            )
+            self.add_item(self.is_anonymous)
+            
+            # 公開設定
+            self.is_private = discord.ui.TextInput(
+                label='公開設定',
+                placeholder='公開する場合は「公開」、非公開の場合は「非公開」と入力',
+                default='非公開' if current_is_private else '公開',
+                required=True,
+                max_length=3
+            )
+            self.add_item(self.is_private)
         
         async def on_submit(self, interaction: discord.Interaction):
             try:
@@ -47,6 +76,21 @@ class Edit(commands.Cog):
                 if not self.category.value.strip():
                     await interaction.response.send_message("❌ カテゴリーを入力してください。", ephemeral=True)
                     return
+                    
+                # 表示名と公開設定のバリデーション
+                display_option = self.is_anonymous.value.strip()
+                if display_option not in ['表示', '匿名']:
+                    await interaction.response.send_message("❌ 表示名は「表示」または「匿名」で入力してください。", ephemeral=True)
+                    return
+
+                privacy_option = self.is_private.value.strip()
+                if privacy_option not in ['公開', '非公開']:
+                    await interaction.response.send_message("❌ 公開設定は「公開」または「非公開」で入力してください。", ephemeral=True)
+                    return
+
+                is_anonymous = display_option == '匿名'
+                is_private = privacy_option == '非公開'
+                image_url = self.image_url.value.strip() or None
                 
                 await interaction.response.defer(ephemeral=True)
                 
@@ -55,13 +99,23 @@ class Edit(commands.Cog):
                     cursor = self.bot.db.cursor()
                     cursor.execute('''
                         UPDATE thoughts 
-                        SET content = ?, category = ?, updated_at = ?
+                        SET content = ?, 
+                            category = ?, 
+                            image_url = ?,
+                            is_anonymous = ?,
+                            is_private = ?,
+                            updated_at = ?,
+                            display_name = ?
                         WHERE id = ? AND user_id = ?
-                        RETURNING image_url, is_private, is_anonymous
+                        RETURNING *
                     ''', (
                         self.content.value.strip(),
                         self.category.value.strip(),
+                        image_url,
+                        is_anonymous,
+                        is_private,
                         datetime.now().isoformat(),
+                        None if is_anonymous else interaction.user.display_name,
                         self.post_id,
                         interaction.user.id
                     ))
@@ -80,7 +134,8 @@ class Edit(commands.Cog):
                     self.bot.db.commit()
                     
                     # 編集完了メッセージ
-                    image_url, is_private, is_anonymous = result
+                    _, _, _, content, category, image_url, is_anonymous, is_private, created_at, updated_at, user_id, display_name = result
+                    
                     embed = discord.Embed(
                         title="✅ 投稿を更新しました",
                         description=f"`ID: {self.post_id}` の投稿を更新しました。",
@@ -92,37 +147,60 @@ class Edit(commands.Cog):
                         embed.set_image(url=image_url)
                     
                     # 編集内容のプレビュー
-                    preview_content = self.content.value[:100] + ('...' if len(self.content.value) > 100 else '')
+                    preview_content = content[:100] + ('...' if len(content) > 100 else '')
                     embed.add_field(
                         name="更新内容",
-                        value=f"**カテゴリー:** {self.category.value}\n"
+                        value=f"**カテゴリー:** {category}\n"
+                              f"**表示名:** {'匿名' if is_anonymous else '表示'}\n"
+                              f"**公開設定:** {'非公開 🔒' if is_private else '公開 🌐'}\n"
                               f"**内容:** {preview_content}",
                         inline=False
                     )
                     
-                    # ステータスを表示
-                    status = []
-                    if is_private:
-                        status.append("🔒 非公開")
-                    if is_anonymous:
-                        status.append("👤 匿名")
+                    # メッセージ参照を更新
+                    if not is_private:
+                        cursor.execute('''
+                            SELECT message_id, channel_id 
+                            FROM message_references 
+                            WHERE post_id = ?
+                        ''', (self.post_id,))
+                        
+                        message_ref = cursor.fetchone()
+                        if message_ref:
+                            message_id, channel_id = message_ref
+                            try:
+                                channel = self.bot.get_channel(int(channel_id))
+                                if channel:
+                                    message = await channel.fetch_message(int(message_id))
+                                    
+                                    # 埋め込みメッセージを更新
+                                    new_embed = discord.Embed(
+                                        description=content,
+                                        color=discord.Color.blue()
+                                    )
+                                    
+                                    # 表示名を設定
+                                    if is_anonymous:
+                                        new_embed.set_author(name='匿名')
+                                    else:
+                                        new_embed.set_author(
+                                            name=display_name or interaction.user.display_name,
+                                            icon_url=str(interaction.user.display_avatar.url)
+                                        )
+                                    
+                                    # フッターにカテゴリーと投稿IDを表示
+                                    footer_text = f'カテゴリー: {category} | ID: {self.post_id}'
+                                    new_embed.set_footer(text=footer_text)
+                                    
+                                    # 画像があれば追加
+                                    if image_url:
+                                        new_embed.set_image(url=image_url)
+                                    
+                                    await message.edit(embed=new_embed)
+                            except Exception as e:
+                                print(f"メッセージ更新エラー: {e}")
                     
-                    if status:
-                        embed.add_field(
-                            name="ステータス",
-                            value=" | ".join(status),
-                            inline=False
-                        )
-                    
-                    # 編集ボタンを追加
-                    view = discord.ui.View(timeout=180)
-                    view.add_item(discord.ui.Button(
-                        label="この投稿を表示",
-                        style=discord.ButtonStyle.link,
-                        url=f"https://discord.com/channels/{interaction.guild.id}/{interaction.channel.id}/{self.post_id}"
-                    ))
-                    
-                    await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+                    await interaction.followup.send(embed=embed, ephemeral=True)
                     
                 except Exception as db_error:
                     self.bot.db.rollback()
@@ -241,7 +319,10 @@ class Edit(commands.Cog):
                     bot=self.bot,
                     post_id=post_id,
                     current_content=current_content,
-                    current_category=current_category
+                    current_category=current_category,
+                    current_image_url=current_image_url,
+                    current_is_anonymous=bool(current_is_anonymous),
+                    current_is_private=bool(current_is_private)
                 )
                 await interaction.response.send_modal(modal)
                 return
