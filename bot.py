@@ -132,7 +132,10 @@ async def sync(ctx):
 # ヘルプコマンド（スラッシュコマンドのみ）
 @bot.tree.command(name='help', description='利用可能なコマンドを表示します')
 async def help_command(interaction: discord.Interaction):
-    # エフェメラルメッセージとして送信
+    # 即座に応答を返す
+    await interaction.response.defer(ephemeral=True)
+    
+    # エフェラルメッセージとして送信
     embed = discord.Embed(
         title='📚 利用可能なコマンド',
         description='以下のコマンドが利用できます。',
