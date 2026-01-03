@@ -231,15 +231,20 @@ class Edit(commands.Cog):
                 current_content, current_category, _ = post
                 
                 # モーダルで編集
-                modal = self.EditModal(
-                    bot=self.bot,
-                    post_id=post_id,
-                    current_content=current_content,
-                    current_category=current_category
-                )
-                
-                await interaction.followup.send("📝 編集モーダルを開いています...", ephemeral=True, delete_after=1)
-                await interaction.followup.send_modal(modal)
+                try:
+                    modal = self.bot.get_cog('Edit').EditModal(
+                        bot=self.bot,
+                        post_id=post_id,
+                        current_content=current_content,
+                        current_category=current_category
+                    )
+                    
+                    await interaction.followup.send("📝 編集モーダルを開いています...", ephemeral=True, delete_after=1)
+                    await interaction.followup.send_modal(modal)
+                except Exception as e:
+                    error_msg = f"モーダルの作成中にエラーが発生しました: {str(e)}"
+                    print(f"Modal Creation Error: {error_msg}")
+                    await interaction.followup.send(f"❌ エラーが発生しました: {str(e)}", ephemeral=True)
                 return
             
             # post_idが指定されていない場合は投稿一覧を表示
@@ -267,7 +272,8 @@ class Edit(commands.Cog):
             )
             
         except Exception as e:
-            error_msg = f"エラーが発生しました: {str(e)}"
+            error_msg = f"コマンド実行中にエラーが発生しました: {str(e)}\n```{type(e).__name__}```"
+            print(f"Command Error in edit_post: {error_msg}")
             print(f"Edit Command Error: {error_msg}")
             if not interaction.response.is_done():
                 await interaction.response.send_message("❌ エラーが発生しました。もう一度お試しください。", ephemeral=True)
