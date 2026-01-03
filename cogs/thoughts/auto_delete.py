@@ -27,18 +27,18 @@ class AutoDelete(commands.Cog):
         content = message.content.lower().strip()
         if any(keyword in content for keyword in self.delete_keywords):
             try:
-                # メッセージを削除
-                await message.delete()
-                # 削除確認メッセージを送信（5秒後に削除）
-                confirm = await message.channel.send("✅ メッセージを削除しました", delete_after=5.0)
+                # メッセージを編集して「削除済み」に変更
+                await message.edit(content="[削除されました]")
+                # 編集確認メッセージを送信（5秒後に削除）
+                confirm = await message.channel.send("✅ メッセージを編集しました", delete_after=5.0)
             except discord.NotFound:
                 # メッセージが既に削除されている場合
                 pass
             except discord.Forbidden:
-                # メッセージ削除の権限がない場合
-                await message.channel.send("❌ メッセージを削除する権限がありません", delete_after=5.0)
+                # メッセージ編集の権限がない場合
+                await message.channel.send("❌ メッセージを編集する権限がありません", delete_after=5.0)
             except Exception as e:
-                print(f"[ERROR] メッセージ削除中にエラー: {e}")
+                print(f"[ERROR] メッセージ編集処理中にエラー: {e}")
                 await message.channel.send("❌ エラーが発生しました", delete_after=5.0)
 
 async def setup(bot):
