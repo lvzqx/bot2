@@ -10,33 +10,99 @@ class Delete(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        # ボット自身のメッセージやDM以外は無視
-        if message.author == self.bot.user or not isinstance(message.channel, discord.DMChannel):
+        # ボット自身のメッセージは無視
+        if message.author == self.bot.user:
             return
-
-        # 削除コマンドのチェック
-        if message.content.lower() in ['削除', 'delete', 'さくじょ']:
+            
+        # DMの場合の処理
+        if isinstance(message.channel, discord.DMChannel):
+            await self.handle_dm_command(message)
+    
+    async def handle_dm_command(self, message: discord.Message):
+        content = message.content.strip().lower()
+        
+        # メッセージ削除コマンド
+        if content in ['削除', 'delete', 'さくじょ']:
+            await self.delete_bot_messages(message)
+        # 投稿IDを指定した削除コマンド（例: /delete 123）
+        elif content.startswith('/delete '):
+            await self.delete_private_post(message)
+    
+    async def delete_bot_messages(self, message: discord.Message):
+        """DM内のボットメッセージを削除"""
+        try:
+            # このスレッドのボットのメッセージを削除
+            async for msg in message.channel.history(limit=100):
+                if msg.author == self.bot.user:
+                    try:
+                        await msg.delete()
+                    except:
+                        continue
+            
+            # 確認メッセージを送信（すぐに削除）
+            confirm = await message.channel.send("✅ メッセージを削除しました")
+            await asyncio.sleep(3)
+            await confirm.delete()
+            
+        except Exception as e:
+            print(f"DMメッセージ削除エラー: {e}")
             try:
-                # このスレッドのボットのメッセージを取得
-                async for msg in message.channel.history(limit=100):
-                    if msg.author == self.bot.user:
-                        try:
-                            await msg.delete()
-                        except:
-                            continue
+                await message.channel.send("❌ メッセージの削除中にエラーが発生しました", delete_after=5)
+            except:
+                pass
+    
+    async def delete_private_post(self, message: discord.Message):
+        """DMから非公開投稿を削除（埋め込みメッセージも削除）"""
+        try:
+            # 投稿IDを取得
+            post_id = message.content.split()[-1].strip()
+            if not post_id.isdigit():
+                await message.channel.send("❌ 正しい投稿IDを指定してください。例: `/delete 123`", delete_after=10)
+                return
                 
-                # 確認メッセージを送信（すぐに削除）
-                confirm = await message.channel.send("✅ メッセージを削除しました")
-                await asyncio.sleep(3)  # 3秒後に削除
-                await confirm.delete()
+            post_id = int(post_id)
+            user_id = message.author.id
+            
+            # メッセージ参照を取得
+            cursor = self.bot.db.cursor()
+            cursor.execute('''
+                SELECT message_id, channel_id FROM message_references 
+                WHERE post_id = ?
+            ''', (post_id,))
+            
+            msg_ref = cursor.fetchone()
+            
+            # 投稿の存在確認と削除
+            cursor.execute('''
+                DELETE FROM thoughts 
+                WHERE id = ? AND user_id = ? AND is_private = 1
+                RETURNING id
+            ''', (post_id, user_id))
+            
+            if cursor.fetchone():
+                # メッセージ参照を削除
+                cursor.execute('DELETE FROM message_references WHERE post_id = ?', (post_id,))
+                self.bot.db.commit()
                 
-            except Exception as e:
-                print(f"DMメッセージ削除エラー: {e}")
-                try:
-                    await message.channel.send("❌ メッセージの削除中にエラーが発生しました", delete_after=5)
-                except:
-                    pass
-            return
+                # 埋め込みメッセージを削除
+                if msg_ref:
+                    message_id, channel_id = msg_ref
+                    try:
+                        channel = self.bot.get_channel(int(channel_id))
+                        if channel and isinstance(channel, discord.DMChannel):
+                            msg = await channel.fetch_message(int(message_id))
+                            if msg:
+                                await msg.delete()
+                    except Exception as e:
+                        print(f"メッセージ削除エラー: {e}")
+                
+                await message.channel.send(f"✅ 非公開投稿 (ID: {post_id}) を削除しました")
+            else:
+                await message.channel.send("❌ 削除できる非公開投稿が見つかりませんでした", delete_after=10)
+                
+        except Exception as e:
+            print(f"非公開投稿削除エラー: {e}")
+            await message.channel.send("❌ 投稿の削除中にエラーが発生しました", delete_after=10)
 
     @app_commands.command(name="delete", description="投稿を削除します")
     @app_commands.describe(post_id="削除する投稿のID")
