@@ -133,10 +133,18 @@ class Delete(commands.Cog):
                                 if isinstance(channel, discord.DMChannel):
                                     print("[DEBUG] DMの履歴からメッセージを検索中...")
                                     async for msg in channel.history(limit=100):
-                                        if msg.embeds and msg.embeds[0].footer and f"ID: {post_id}" in str(msg.embeds[0].footer.text):
+                                        if (msg.embeds and len(msg.embeds) > 0 and 
+                                            hasattr(msg.embeds[0], 'footer') and 
+                                            msg.embeds[0].footer and 
+                                            hasattr(msg.embeds[0].footer, 'text') and 
+                                            msg.embeds[0].footer.text and 
+                                            f"ID: {post_id}" in str(msg.embeds[0].footer.text)):
                                             print("[DEBUG] 埋め込みメッセージを検出、削除します")
-                                            await msg.delete()
-                                            print("[DEBUG] DMの埋め込みメッセージを削除しました")
+                                            try:
+                                                await msg.delete()
+                                                print("[DEBUG] DMの埋め込みメッセージを削除しました")
+                                            except Exception as delete_error:
+                                                print(f"[ERROR] メッセージ削除エラー: {delete_error}")
                                             break
                             except Exception as e:
                                 print(f"[ERROR] メッセージ削除エラー: {type(e).__name__}: {e}")
@@ -144,10 +152,18 @@ class Delete(commands.Cog):
                                 if isinstance(channel, discord.DMChannel):
                                     try:
                                         async for msg in channel.history(limit=100):
-                                            if msg.embeds and msg.embeds[0].footer and f"ID: {post_id}" in str(msg.embeds[0].footer.text):
+                                            if (msg.embeds and len(msg.embeds) > 0 and 
+                                                hasattr(msg.embeds[0], 'footer') and 
+                                                msg.embeds[0].footer and 
+                                                hasattr(msg.embeds[0].footer, 'text') and 
+                                                msg.embeds[0].footer.text and 
+                                                f"ID: {post_id}" in str(msg.embeds[0].footer.text)):
                                                 print("[DEBUG] エラー後のDMメッセージ削除を試みます")
-                                                await msg.delete()
-                                                print("[DEBUG] DMの埋め込みメッセージを削除しました")
+                                                try:
+                                                    await msg.delete()
+                                                    print("[DEBUG] DMの埋め込みメッセージを削除しました")
+                                                except Exception as delete_error:
+                                                    print(f"[ERROR] メッセージ削除エラー: {delete_error}")
                                                 break
                                     except Exception as e2:
                                         print(f"[ERROR] 代替削除処理中にエラー: {type(e2).__name__}: {e2}")
@@ -162,10 +178,18 @@ class Delete(commands.Cog):
                             try:
                                 print("[DEBUG] 例外発生時のDMメッセージ削除を試みます")
                                 async for msg in message.channel.history(limit=100):
-                                    if msg.embeds and msg.embeds[0].footer and f"ID: {post_id}" in str(msg.embeds[0].footer.text):
+                                    if (msg.embeds and len(msg.embeds) > 0 and 
+                                        hasattr(msg.embeds[0], 'footer') and 
+                                        msg.embeds[0].footer and 
+                                        hasattr(msg.embeds[0].footer, 'text') and 
+                                        msg.embeds[0].footer.text and 
+                                        f"ID: {post_id}" in str(msg.embeds[0].footer.text)):
                                         print("[DEBUG] 埋め込みメッセージを検出、削除します")
-                                        await msg.delete()
-                                        print("[DEBUG] DMの埋め込みメッセージを削除しました")
+                                        try:
+                                            await msg.delete()
+                                            print("[DEBUG] DMの埋め込みメッセージを削除しました")
+                                        except Exception as delete_error:
+                                            print(f"[ERROR] メッセージ削除エラー: {delete_error}")
                                         break
                             except Exception as e2:
                                 print(f"[ERROR] 例外処理中のDMメッセージ削除エラー: {type(e2).__name__}: {e2}")
