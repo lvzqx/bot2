@@ -150,22 +150,22 @@ class Post(commands.Cog):
                         if is_private:
                             # 非公開の場合はDMに送信
                             dm_channel = await interaction.user.create_dm()
-                            message = await dm_channel.send(embed=discord.Embed(
+                            dm_embed = discord.Embed(
                                 title='🔒 非公開メッセージ',
                                 description=content,
-                                color=discord.Color.blue(),
-                                timestamp=datetime.now()
-                            ).set_footer(text=f'カテゴリー: {category} | ID: {post_id}'))
+                                color=discord.Color.blue()
+                            )
+                            dm_embed.set_footer(text=f'カテゴリー: {category} | ID: {post_id}')
+                            message = await dm_channel.send(embed=dm_embed)
                             
                             # 確認メッセージを更新
                             embed.add_field(name='配信先', value='DMに送信されました', inline=False)
                             
                         else:
-                            # 公開の場合はチャンネルに投稿
+                            # チャンネルに投稿するための埋め込みメッセージを作成
                             channel_embed = discord.Embed(
                                 description=content,
-                                color=discord.Color.blue(),
-                                timestamp=datetime.now()
+                                color=discord.Color.blue()
                             )
                             
                             # 投稿者情報を設定
@@ -177,8 +177,9 @@ class Post(commands.Cog):
                             else:
                                 channel_embed.set_author(name='匿名')
                             
-                            # フッターにカテゴリーと投稿IDを表示
-                            channel_embed.set_footer(text=f'カテゴリー: {category} | ID: {post_id}')
+                            # フッターにカテゴリーと投稿IDを表示（時間は表示しない）
+                            footer_text = f'カテゴリー: {category} | ID: {post_id}'
+                            channel_embed.set_footer(text=footer_text)
                             
                             # 画像がある場合は追加
                             if image_url:

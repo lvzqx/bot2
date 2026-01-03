@@ -17,12 +17,12 @@ class Delete(commands.Cog):
             # 投稿の存在確認と情報取得
             cursor = self.bot.db.cursor()
             cursor.execute('''
-                SELECT user_id, is_private, id, content, 
-                       (SELECT message_id FROM message_references WHERE post_id = ?) as message_id,
-                       (SELECT channel_id FROM message_references WHERE post_id = ?) as channel_id
-                FROM thoughts 
-                WHERE id = ?
-            ''', (post_id, post_id, post_id))
+                SELECT t.user_id, t.is_private, t.id, t.content, 
+                       m.message_id, m.channel_id
+                FROM thoughts t
+                LEFT JOIN message_references m ON t.id = m.post_id
+                WHERE t.id = ?
+            ''', (post_id,))
             
             post = cursor.fetchone()
             

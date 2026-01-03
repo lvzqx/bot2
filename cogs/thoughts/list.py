@@ -51,6 +51,7 @@ class List(commands.Cog):
                         timestamp=datetime.now()
                     )
                     
+                    page_posts = []
                     for post in posts[i:i + items_per_page]:
                         post_id, content, category, created_at, is_private, display_name = post
                         created_at_dt = datetime.fromisoformat(created_at)
@@ -76,22 +77,26 @@ class List(commands.Cog):
                             icon_url=str(interaction.user.display_avatar.url) if not is_anonymous else None
                         )
                         
-                        # フッターに投稿日時とカテゴリーを表示
+                        # フッターにカテゴリーを表示
                         footer_text = f"カテゴリー: {category}"
                         if is_private:
                             footer_text += " | 🔒 非公開"
                         post_embed.set_footer(text=footer_text)
                         
-                        # メインの埋め込みに追加
+                        # メインの埋め込みに追加（投稿IDのみを表示）
                         embed.add_field(
                             name=f"ID: {post_id}",
-                            value="",
+                            value=f"{display_content}\n​",  # 改行と空行を追加
                             inline=False
                         )
-                        pages[-1] = (embed, post_embed)  # タプルで保存
+                        page_posts.append((post_id, post_embed))
                     
                     embed.set_footer(text=f"ページ {i//items_per_page + 1}/{((len(posts)-1)//items_per_page) + 1}")
                     pages.append(embed)
+                    
+                    # 各投稿の詳細を別のページとして追加
+                    for post_id, post_embed in page_posts:
+                        pages.append(post_embed)
                 
                 if not pages:
                     embed = discord.Embed(
