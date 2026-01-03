@@ -28,6 +28,7 @@ class ThoughtBot(commands.Bot):
             'cogs.thoughts.delete',
             'cogs.thoughts.edit',
             'cogs.thoughts.cleanup',
+            'cogs.thoughts.auto_delete',
         ]
         self.db = None
 
