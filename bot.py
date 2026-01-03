@@ -26,9 +26,10 @@ class ThoughtBot(commands.Bot):
             'cogs.thoughts.list',
             'cogs.thoughts.search',
             'cogs.thoughts.delete',
+            'cogs.thoughts.delete_dm',  # DM用の削除コマンド
             'cogs.thoughts.edit',
             'cogs.thoughts.cleanup',
-            'cogs.thoughts.auto_delete',
+            'cogs.thoughts.auto_delete',  # 自動削除機能
         ]
         self.db = None
 
