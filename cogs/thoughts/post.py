@@ -5,6 +5,7 @@ from datetime import datetime
 import os
 import traceback
 import sys
+import sqlite3
 
 # Add the project root to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
