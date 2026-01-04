@@ -13,13 +13,17 @@ class DeleteDM(commands.Cog):
         self.bot = bot
         print("DeleteDM cog が読み込まれました")
     
-    @app_commands.command(name="dm_delete", description="DMで送信したメッセージを削除します")
+    @commands.hybrid_command(
+        name="dm_delete",
+        description="DMで送信したメッセージを削除します",
+        with_app_command=True
+    )
     @app_commands.describe(message_id="削除するメッセージのID")
-    async def dm_delete(self, interaction: discord.Interaction, message_id: str):
+    async def dm_delete(self, ctx: commands.Context, message_id: str):
         """DMで送信したメッセージを削除します"""
         # DMでのみ実行可能
-        if not isinstance(interaction.channel, discord.DMChannel):
-            await interaction.response.send_message(
+        if not isinstance(ctx.channel, discord.DMChannel):
+            await ctx.send(
                 "このコマンドはDMでのみ使用できます。",
                 ephemeral=True
             )
@@ -29,7 +33,7 @@ class DeleteDM(commands.Cog):
             # メッセージIDを数値に変換
             message_id_int = int(message_id)
         except ValueError:
-            await interaction.response.send_message(
+            await ctx.send(
                 "無効なメッセージIDです。",
                 ephemeral=True
             )
@@ -37,13 +41,13 @@ class DeleteDM(commands.Cog):
         
         # メッセージ削除を実行
         success, message = await self.delete_message_by_id(
-            interaction,
+            ctx,
             message_id_int,
-            interaction.user.id
+            ctx.author.id
         )
         
         # 結果をユーザーに通知
-        await interaction.response.send_message(message, ephemeral=True)
+        await ctx.send(message, ephemeral=True)
     
     
     def get_db_connection(self):
