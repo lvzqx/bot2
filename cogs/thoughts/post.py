@@ -176,34 +176,50 @@ class Post(commands.Cog):
                     print(error_msg)
                     import traceback
                     traceback.print_exc()
-                    if interaction.response.is_done():
-                        await interaction.followup.send("❌ 予期せぬエラーが発生しました。しばらくしてからもう一度お試しください。", ephemeral=True)
-                    else:
-                        await interaction.response.send_message("❌ 予期せぬエラーが発生しました。しばらくしてからもう一度お試しください。", ephemeral=True)
-                    return
                     
-                    # 現在の日時を取得
-                    now = datetime.now().isoformat()
-                    
-                    # 投稿を挿入
-                    cursor.execute('''
-                        INSERT INTO thoughts (
-                            user_id, content, category, image_url, 
-                            is_anonymous, is_private, created_at, updated_at,
-                            display_name
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (
-                        interaction.user.id,
-                        content,
-                        category,
-                        image_url,
-                        is_anonymous,  # 匿名設定
-                        is_private,  # 公開設定
-                        now,
-                        now,
-                        None if is_anonymous else interaction.user.display_name  # 表示名を保存
-                    ))
-                    
+                try:
+                    try:
+                        # 現在の日時を取得
+                        now = datetime.now().isoformat()
+                        
+                        # 投稿を挿入
+                        cursor.execute('''
+                            INSERT INTO thoughts (
+                                user_id, content, category, image_url, 
+                                is_anonymous, is_private, created_at, updated_at,
+                                display_name
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            interaction.user.id,
+                            content,
+                            category,
+                            image_url,
+                            is_anonymous,  # 匿名設定
+                            is_private,  # 公開設定
+                            now,
+                            now,
+                            None if is_anonymous else interaction.user.display_name  # 表示名を保存
+                        ))
+                        
+                        # 変更をコミット
+                        conn.commit()
+                        
+                        # 投稿IDを取得
+                        post_id = cursor.lastrowid
+                        print(f"[DEBUG] 投稿を保存しました: post_id={post_id}")
+                        
+                    except sqlite3.Error as e:
+                        error_msg = f"[ERROR] データベースへの投稿の保存中にエラーが発生しました: {e}"
+                        print(error_msg)
+                        import traceback
+                        traceback.print_exc()
+                        
+                        if interaction.response.is_done():
+                            await interaction.followup.send("❌ 投稿の保存中にエラーが発生しました。しばらくしてからもう一度お試しください。", ephemeral=True)
+                        else:
+                            await interaction.response.send_message("❌ 投稿の保存中にエラーが発生しました。しばらくしてからもう一度お試しください。", ephemeral=True)
+                        return
+                        
                     # 投稿完了メッセージを表示
                     embed = discord.Embed(
                         title='✅ 投稿が完了しました',
@@ -238,41 +254,63 @@ class Post(commands.Cog):
                     # チャンネルまたはDMに投稿
                     try:
                         if is_private:
-                            try:
-                                # 投稿者にDMを送信
-                                dm_embed = discord.Embed(
-                                    description=content,
-                                    color=discord.Color.blue()
-                                )
-                                
-                                # 表示名を設定
-                                if is_anonymous:
-                                    dm_embed.set_author(name='匿名', icon_url=DEFAULT_AVATAR)
-                                else:
-                                    dm_embed.set_author(
-                                        name=interaction.user.display_name,
-                                        icon_url=str(interaction.user.display_avatar.url)
-                                    )
-                                
-                                # フッターにカテゴリーと投稿IDを表示
-                                footer_text = f'カテゴリー: {category} | ID: {post_id}'
-                                dm_embed.set_footer(text=footer_text)
-                                
-                                # 画像があれば追加
-                                if image_url:
-                                    dm_embed.set_image(url=image_url)
-                                
-                                # 送信先のユーザーを取得
-                                user = interaction.user
-                                if user:
-                                    dm_channel = user.dm_channel or await user.create_dm()
-                                    await dm_channel.send(embed=dm_embed)
-                            except Exception as e:
-                                print(f"DM送信エラー: {e}")
-                                await interaction.followup.send("❌ 非公開メッセージの送信中にエラーが発生しました。", ephemeral=True)
+                            # 投稿者にDMを送信
+                            dm_embed = discord.Embed(
+                                description=content,
+                                color=discord.Color.blue()
+                            )
                             
-                            # 確認メッセージを更新
-                            embed.add_field(name='配信先', value='DMに送信されました', inline=False)
+                            # 表示名を設定
+                            if is_anonymous:
+                                dm_embed.set_author(name='匿名', icon_url=DEFAULT_AVATAR)
+                            else:
+                                dm_embed.set_author(
+                                    name=interaction.user.display_name,
+                                    icon_url=str(interaction.user.display_avatar.url)
+                                )
+                            
+                            # フッターにカテゴリーと投稿IDを表示
+                            footer_text = f'カテゴリー: {category} | ID: {post_id}'
+                            dm_embed.set_footer(text=footer_text)
+                            
+                            # 画像があれば追加
+                            if image_url:
+                                dm_embed.set_image(url=image_url)
+                            
+                            # 送信先のユーザーを取得
+                            user = interaction.user
+                            if user:
+                                try:
+                                    # DMチャンネルを取得または作成
+                                    if user.dm_channel is None:
+                                        dm_channel = await user.create_dm()
+                                        print(f"[DEBUG] 新しいDMチャンネルを作成しました: {dm_channel.id}")
+                                    else:
+                                        dm_channel = user.dm_channel
+                                        print(f"[DEBUG] 既存のDMチャンネルを使用します: {dm_channel.id}")
+                                    
+                                    # DMを送信
+                                    print(f"[DEBUG] DMを送信します: user_id={user.id}, channel_id={dm_channel.id}")
+                                    await dm_channel.send(embed=dm_embed)
+                                    print("[DEBUG] DM送信が完了しました")
+                                    
+                                    # 確認メッセージを更新
+                                    embed.add_field(name='配信先', value='DMに送信されました', inline=False)
+                                    
+                                except discord.Forbidden:
+                                    error_msg = "❌ DMがブロックされているか、DMを送信する権限がありません。"
+                                    print("[ERROR] DM送信エラー: ユーザーがDMをブロックしているか、BotにDMを送信する権限がありません")
+                                    embed.add_field(name='エラー', value=error_msg, inline=False)
+                                    
+                                except Exception as e:
+                                    error_msg = f"❌ DM送信中にエラーが発生しました: {str(e)}"
+                                    print(f"[ERROR] DM送信エラー: {e}")
+                                    import traceback
+                                    traceback.print_exc()
+                                    embed.add_field(name='エラー', value=error_msg, inline=False)
+                        
+                            # 確認メッセージを送信
+                            await interaction.followup.send(embed=embed, ephemeral=True)
                             
                         else:
                             # チャンネルに投稿するための埋め込みメッセージを作成
@@ -303,13 +341,18 @@ class Post(commands.Cog):
                             
                             # メッセージ参照をデータベースに保存
                             try:
+                                # messages テーブルに挿入
                                 cursor.execute('''
-                                    INSERT INTO message_references (post_id, message_id, channel_id)
+                                    INSERT INTO messages (post_id, message_id, channel_id)
                                     VALUES (?, ?, ?)
-                                ''', (post_id, message.id, message.channel.id))
-                                self.bot.db.commit()
-                            except Exception as e:
-                                print(f"メッセージ参照の保存中にエラーが発生しました: {e}")
+                                ''', (post_id, str(message.id), str(message.channel.id)))
+                                conn.commit()
+                                print(f"[DEBUG] メッセージ参照を保存しました: post_id={post_id}, message_id={message.id}")
+                            except sqlite3.Error as e:
+                                print(f"[ERROR] メッセージ参照の保存中にエラーが発生しました: {e}")
+                                import traceback
+                                traceback.print_exc()
+                                # エラーが発生しても処理は続行
                             
                             # 確認メッセージを更新
                             embed.add_field(name='チャンネル', value=f'[投稿を表示]({message.jump_url})', inline=False)
