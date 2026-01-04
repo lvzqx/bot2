@@ -92,58 +92,93 @@ class Post(commands.Cog):
                 try:
                     # データベースファイルのパス（bot.pyと同じディレクトリ）
                     db_path = 'thoughts.db'
+                    print(f"[DEBUG] データベースファイルのパス: {os.path.abspath(db_path)}")
+                    
+                    # ディレクトリが存在するか確認し、なければ作成
+                    os.makedirs(os.path.dirname(os.path.abspath(db_path)) or '.', exist_ok=True)
                     
                     # データベースに接続（ファイルがなければ作成される）
                     conn = sqlite3.connect(db_path)
                     conn.row_factory = sqlite3.Row
                     cursor = conn.cursor()
                     
-                    # テーブルが存在するか確認し、なければ作成
-                    cursor.execute('''
-                        CREATE TABLE IF NOT EXISTS thoughts (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            user_id INTEGER NOT NULL,
-                            content TEXT NOT NULL,
-                            category TEXT,
-                            image_url TEXT,
-                            is_anonymous BOOLEAN DEFAULT 0,
-                            is_private BOOLEAN DEFAULT 0,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            display_name TEXT
-                        )
-                    ''')
+                    # 外部キー制約を有効化
+                    cursor.execute('PRAGMA foreign_keys = ON')
                     
-                    # messages テーブル
-                    cursor.execute('''
-                        CREATE TABLE IF NOT EXISTS messages (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            channel_id TEXT NOT NULL,
-                            message_id TEXT NOT NULL UNIQUE,
-                            post_id INTEGER NOT NULL,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            FOREIGN KEY (post_id) REFERENCES thoughts (id) ON DELETE CASCADE
-                        )
-                    ''')
+                    # トランザクション開始
+                    cursor.execute('BEGIN TRANSACTION')
                     
-                    # attachments テーブル
-                    cursor.execute('''
-                        CREATE TABLE IF NOT EXISTS attachments (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            post_id INTEGER NOT NULL,
-                            url TEXT NOT NULL,
-                            FOREIGN KEY (post_id) REFERENCES thoughts (id) ON DELETE CASCADE
-                        )
-                    ''')
+                    try:
+                        # テーブルが存在するか確認し、なければ作成
+                        cursor.execute('''
+                            CREATE TABLE IF NOT EXISTS thoughts (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                user_id INTEGER NOT NULL,
+                                content TEXT NOT NULL,
+                                category TEXT,
+                                image_url TEXT,
+                                is_anonymous BOOLEAN DEFAULT 0,
+                                is_private BOOLEAN DEFAULT 0,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                display_name TEXT
+                            )
+                        ''')
+                        
+                        # messages テーブル
+                        cursor.execute('''
+                            CREATE TABLE IF NOT EXISTS messages (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                channel_id TEXT NOT NULL,
+                                message_id TEXT NOT NULL UNIQUE,
+                                post_id INTEGER NOT NULL,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                FOREIGN KEY (post_id) REFERENCES thoughts (id) ON DELETE CASCADE
+                            )
+                        ''')
+                        
+                        # attachments テーブル
+                        cursor.execute('''
+                            CREATE TABLE IF NOT EXISTS attachments (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                post_id INTEGER NOT NULL,
+                                url TEXT NOT NULL,
+                                FOREIGN KEY (post_id) REFERENCES thoughts (id) ON DELETE CASCADE
+                            )
+                        ''')
+                        
+                        conn.commit()
+                        print("[DEBUG] テーブルの作成/確認が完了しました")
+                        
+                    except Exception as e:
+                        conn.rollback()
+                        print(f"[ERROR] テーブル作成エラー: {e}")
+                        raise
                     
-                    conn.commit()
                     print("[DEBUG] データベース接続が確立されました")
                     
-                except Exception as e:
-                    print(f"[ERROR] データベース接続エラー: {e}")
+                except sqlite3.Error as e:
+                    error_msg = f"[ERROR] データベースエラー: {e}"
+                    print(error_msg)
+                    print(f"[DEBUG] データベースファイルの存在: {os.path.exists(db_path) if 'db_path' in locals() else '不明'}")
+                    print(f"[DEBUG] カレントディレクトリ: {os.getcwd()}")
                     import traceback
                     traceback.print_exc()
-                    await interaction.followup.send("❌ データベースに接続できませんでした。しばらくしてからもう一度お試しください。", ephemeral=True)
+                    if interaction.response.is_done():
+                        await interaction.followup.send("❌ データベースエラーが発生しました。詳細は管理者に問い合わせてください。", ephemeral=True)
+                    else:
+                        await interaction.response.send_message("❌ データベースエラーが発生しました。詳細は管理者に問い合わせてください。", ephemeral=True)
+                    return
+                    
+                except Exception as e:
+                    error_msg = f"[ERROR] 予期せぬエラー: {e}"
+                    print(error_msg)
+                    import traceback
+                    traceback.print_exc()
+                    if interaction.response.is_done():
+                        await interaction.followup.send("❌ 予期せぬエラーが発生しました。しばらくしてからもう一度お試しください。", ephemeral=True)
+                    else:
+                        await interaction.response.send_message("❌ 予期せぬエラーが発生しました。しばらくしてからもう一度お試しください。", ephemeral=True)
                     return
                     
                     # 現在の日時を取得
