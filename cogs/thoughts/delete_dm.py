@@ -116,11 +116,15 @@ class DeleteDM(commands.Cog):
         """DMでメッセージIDを指定して削除する
         
         Args:
-            ctx: commands.Context オブジェクト
-            message_id: 削除するメッセージID（整数）
+            interaction: discord.Interaction オブジェクト
+            message_id: 削除するメッセージID
             user_id: 削除を試みるユーザーID
         """
-        print(f"[DEBUG] delete_message_by_id 開始: message_id={message_id}, user_id={user_id}")
+        print(f"[DEBUG] delete_message_by_id 開始: message_id={message_id} (型: {type(message_id)}), user_id={user_id}")
+        
+        # メッセージIDを文字列に変換
+        message_id_str = str(message_id)
+        print(f"[DEBUG] メッセージID (文字列): {message_id_str}")
         
         db = None
         try:
