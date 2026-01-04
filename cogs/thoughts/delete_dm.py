@@ -1,5 +1,6 @@
 import asyncio
 import discord
+import os
 from discord.ext import commands
 import sqlite3
 import re
@@ -112,17 +113,43 @@ class DeleteDM(commands.Cog):
             
             # メッセージIDで検索
             try:
-                print("[DEBUG] データベースクエリを実行")
+                print("[DEBUG] データベース接続情報:")
+                print(f"[DEBUG] - データベースファイル: {os.path.abspath('thoughts.db')}")
+                print(f"[DEBUG] - メッセージID: {message_id_str}")
+                
+                # テーブル構造を確認
+                cursor.execute("PRAGMA table_info(messages);")
+                columns = cursor.fetchall()
+                print("[DEBUG] テーブル構造 (messages):")
+                for col in columns:
+                    print(f"[DEBUG] - {col['name']} ({col['type']})")
+                
+                # レコード数を確認
+                cursor.execute("SELECT COUNT(*) as count FROM messages;")
+                count = cursor.fetchone()['count']
+                print(f"[DEBUG] メッセージテーブルのレコード数: {count}")
+                
+                # メッセージを検索
+                print("[DEBUG] メッセージを検索中...")
                 cursor.execute('''
                     SELECT channel_id, message_id, post_id 
                     FROM messages 
                     WHERE message_id = ?
                 ''', (message_id_str,))
+                print("[DEBUG] クエリ実行完了")
+                
+            except sqlite3.OperationalError as e:
+                error_msg = f"[ERROR] データベース操作エラー: {e}"
+                print(error_msg)
+                print("[DEBUG] データベースファイルの存在確認:")
+                print(f"[DEBUG] - 存在するか: {os.path.exists('thoughts.db')}")
+                traceback.print_exc()
+                return False, "❌ データベースに接続できませんでした。管理者に連絡してください。"
             except Exception as e:
-                error_msg = f"[ERROR] データベースクエリエラー: {e}"
+                error_msg = f"[ERROR] 予期せぬエラー: {e}"
                 print(error_msg)
                 traceback.print_exc()
-                return False, "❌ データベースエラーが発生しました。しばらくしてからもう一度お試しください。"
+                return False, "❌ 予期せぬエラーが発生しました。しばらくしてからもう一度お試しください。"
             
             message_data = cursor.fetchone()
             if not message_data:
