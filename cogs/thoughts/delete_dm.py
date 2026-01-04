@@ -134,16 +134,21 @@ class DeleteDM(commands.Cog):
             cursor = db.cursor()
             
             # メッセージを検索（ユーザーIDも確認）
+            print(f"[DEBUG] データベース検索: message_id={message_id}, user_id={user_id}")
+            
+            # メッセージIDとユーザーIDで検索
             cursor.execute('''
-                SELECT m.message_id, t.id as post_id, t.user_id
+                SELECT m.message_id, t.id as post_id, t.user_id, m.channel_id
                 FROM messages m
                 JOIN thoughts t ON m.post_id = t.id
                 WHERE m.message_id = ? AND t.user_id = ?
             ''', (str(message_id), user_id))
             
             message_info = cursor.fetchone()
+            print(f"[DEBUG] データベース検索結果: {message_info}")
             
             if not message_info:
+                print("[DEBUG] メッセージが見つからないか、削除する権限がありません")
                 return False, "メッセージが見つからないか、削除する権限がありません。"
             
             # メッセージを削除
