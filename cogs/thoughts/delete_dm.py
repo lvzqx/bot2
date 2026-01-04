@@ -185,14 +185,23 @@ class DeleteDM(commands.Cog):
                       f"post_id={row['post_id']}, user_id={row['user_id']}, "
                       f"channel_id={row['channel_id']}, content='{row['content'][:30]}...'")
 
-            # メッセージIDの型に関わらず検索（文字列と数値の両方で試す）
-            cursor.execute('''
-                SELECT m.message_id, t.id as post_id, t.user_id, m.channel_id, t.content
-                FROM messages m
-                JOIN thoughts t ON m.post_id = t.id
-                WHERE (m.message_id = ? OR m.message_id = ?) 
-                AND t.user_id = ?
-            ''', (str(message_id).strip(), int(message_id) if str(message_id).strip().isdigit() else -1, user_id))
+            # メッセージIDを数値に変換して検索
+            try:
+                message_id_int = int(message_id)
+                print(f"[DEBUG] メッセージIDを数値に変換: {message_id} -> {message_id_int}")
+                
+                # データベース内のメッセージIDを数値にキャストして比較
+                cursor.execute('''
+                    SELECT m.message_id, t.id as post_id, t.user_id, m.channel_id, t.content
+                    FROM messages m
+                    JOIN thoughts t ON m.post_id = t.id
+                    WHERE CAST(m.message_id AS INTEGER) = ? 
+                    AND t.user_id = ?
+                ''', (message_id_int, user_id))
+                
+            except (ValueError, TypeError) as e:
+                print(f"[DEBUG] メッセージIDの変換に失敗: {e}")
+                return False, "無効なメッセージIDです。"
             
             # 検索結果を取得して表示（デバッグ用）
             message_info = cursor.fetchone()

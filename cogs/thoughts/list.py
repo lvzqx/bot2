@@ -31,7 +31,7 @@ class List(commands.Cog):
                     SELECT t.id, t.content, t.category, t.created_at, t.is_private, t.display_name,
                            GROUP_CONCAT(a.url, '|') as attachments
                     FROM thoughts t
-                    LEFT JOIN attachments a ON t.id = a.thought_id
+                    LEFT JOIN attachments a ON t.id = a.post_id
                     WHERE t.user_id = ?
                     GROUP BY t.id
                     ORDER BY t.created_at DESC
@@ -64,7 +64,8 @@ class List(commands.Cog):
                         category = post['category']
                         is_private = post['is_private']
                         display_name = post['display_name']
-                        attachments = post['attachments'].split('|') if post['attachments'] else []
+                        # attachmentsがNoneの場合の処理を追加
+                        attachments = post['attachments'].split('|') if post['attachments'] and post['attachments'] != 'None' else []
                         
                         # 内容が長すぎる場合は省略
                         display_content = content[:100] + '...' if len(content) > 100 else content
