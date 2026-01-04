@@ -87,46 +87,62 @@ class Post(commands.Cog):
                 if len(content) > 2000:
                     raise ValueError('メッセージは2000文字以内で入力してください。')
                 
-                # データベーストランザクション開始
-                cursor = self.bot.db.cursor()
+                # データベース接続を確立
                 try:
-                    # データベースのテーブル一覧を表示
-                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-                    tables = cursor.fetchall()
-                    print(f"[DEBUG] 利用可能なテーブル: {tables}")
+                    # データベースファイルのパス（bot.pyと同じディレクトリ）
+                    db_path = 'thoughts.db'
                     
-                    # thoughtsテーブルが存在するか確認
-                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='thoughts';")
-                    if not cursor.fetchone():
-                        print("[DEBUG] thoughtsテーブルが存在しないため、作成します")
-                        cursor.execute('''
-                            CREATE TABLE IF NOT EXISTS thoughts (
-                                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                user_id INTEGER NOT NULL,
-                                content TEXT NOT NULL,
-                                category TEXT,
-                                image_url TEXT,
-                                is_anonymous BOOLEAN DEFAULT 0,
-                                is_private BOOLEAN DEFAULT 0,
-                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                                display_name TEXT
-                            )
-                        ''')
-                        self.bot.db.commit()
+                    # データベースに接続（ファイルがなければ作成される）
+                    conn = sqlite3.connect(db_path)
+                    conn.row_factory = sqlite3.Row
+                    cursor = conn.cursor()
                     
-                    # テーブルのカラム構造を確認
-                    cursor.execute("PRAGMA table_info(thoughts)")
-                    columns = [column[1] for column in cursor.fetchall()]
-                    print(f"[DEBUG] thoughtsテーブルのカラム: {columns}")
+                    # テーブルが存在するか確認し、なければ作成
+                    cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS thoughts (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            user_id INTEGER NOT NULL,
+                            content TEXT NOT NULL,
+                            category TEXT,
+                            image_url TEXT,
+                            is_anonymous BOOLEAN DEFAULT 0,
+                            is_private BOOLEAN DEFAULT 0,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            display_name TEXT
+                        )
+                    ''')
                     
-                    # 不足しているカラムを追加
-                    if 'updated_at' not in columns:
-                        print("[DEBUG] updated_atカラムを追加します")
-                        cursor.execute('ALTER TABLE thoughts ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
-                    if 'display_name' not in columns:
-                        print("[DEBUG] display_nameカラムを追加します")
-                        cursor.execute('ALTER TABLE thoughts ADD COLUMN display_name TEXT')
+                    # messages テーブル
+                    cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS messages (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            channel_id TEXT NOT NULL,
+                            message_id TEXT NOT NULL UNIQUE,
+                            post_id INTEGER NOT NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (post_id) REFERENCES thoughts (id) ON DELETE CASCADE
+                        )
+                    ''')
+                    
+                    # attachments テーブル
+                    cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS attachments (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            post_id INTEGER NOT NULL,
+                            url TEXT NOT NULL,
+                            FOREIGN KEY (post_id) REFERENCES thoughts (id) ON DELETE CASCADE
+                        )
+                    ''')
+                    
+                    conn.commit()
+                    print("[DEBUG] データベース接続が確立されました")
+                    
+                except Exception as e:
+                    print(f"[ERROR] データベース接続エラー: {e}")
+                    traceback.print_exc()
+                    await interaction.followup.send("❌ データベースに接続できませんでした。しばらくしてからもう一度お試しください。", ephemeral=True)
+                    return
                     
                     # 現在の日時を取得
                     now = datetime.now().isoformat()

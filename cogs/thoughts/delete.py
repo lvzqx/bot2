@@ -12,11 +12,71 @@ class Delete(commands.Cog):
         print("Delete cog が読み込まれました")
         
     def get_db_connection(self):
-        """データベース接続を取得する"""
-        if not hasattr(self.bot, 'db'):
-            self.bot.db = sqlite3.connect('thoughts.db')
-            self.bot.db.row_factory = sqlite3.Row
-        return self.bot.db
+        """データベース接続を取得する（シンプル版）"""
+        try:
+            # データベースファイルのパス（bot.pyと同じディレクトリ）
+            db_path = 'thoughts.db'
+            
+            # データベースに接続（ファイルがなければ作成される）
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            
+            # テーブルが存在するか確認し、なければ作成
+            cursor = conn.cursor()
+            
+            # thoughts テーブル
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS thoughts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    content TEXT NOT NULL,
+                    category TEXT,
+                    image_url TEXT,
+                    is_anonymous BOOLEAN DEFAULT 0,
+                    is_private BOOLEAN DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    display_name TEXT
+                )
+            ''')
+            
+            # messages テーブル
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    channel_id TEXT NOT NULL,
+                    message_id TEXT NOT NULL UNIQUE,
+                    post_id INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (post_id) REFERENCES thoughts (id) ON DELETE CASCADE
+                )
+            ''')
+            
+            # attachments テーブル
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS attachments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    post_id INTEGER NOT NULL,
+                    url TEXT NOT NULL,
+                    FOREIGN KEY (post_id) REFERENCES thoughts (id) ON DELETE CASCADE
+                )
+            ''')
+            
+            conn.commit()
+            print("[DEBUG] データベース接続が確立されました")
+            return conn
+            
+        except Exception as e:
+            print(f"[ERROR] データベース接続エラー: {e}")
+            traceback.print_exc()
+            # エラーが発生した場合は新しい接続を試みる
+            try:
+                conn = sqlite3.connect(':memory:')
+                print("[WARNING] メモリ内データベースにフォールバックしました")
+                return conn
+            except:
+                print("[CRITICAL] データベース接続に失敗しました")
+                raise
 
     async def delete_message_by_id(self, interaction: discord.Interaction, message_id: int) -> Tuple[bool, str]:
         """メッセージIDで削除する"""

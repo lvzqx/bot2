@@ -13,75 +13,70 @@ class DeleteDM(commands.Cog):
         print("DeleteDM cog が読み込まれました")
     
     def get_db_connection(self):
-        """データベース接続を取得する"""
+        """データベース接続を取得する（シンプル版）"""
         try:
-            # データベースファイルのパスを取得
-            db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'thoughts.db')
-            print(f"[DEBUG] データベースファイルのパス: {db_path}")
+            # データベースファイルのパスを取得（bot.pyと同じディレクトリを想定）
+            db_path = 'thoughts.db'
             
-            # データベースファイルが存在するか確認
-            if not os.path.exists(db_path):
-                print("[WARNING] データベースファイルが見つかりません。新規作成します。")
-                # ディレクトリが存在するか確認し、なければ作成
-                os.makedirs(os.path.dirname(db_path), exist_ok=True)
-                # 空のデータベースファイルを作成
-                open(db_path, 'a').close()
+            # データベースに接続（ファイルがなければ作成される）
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
             
-            # データベースに接続
-            if not hasattr(self.bot, 'db') or self.bot.db is None:
-                print("[DEBUG] 新しいデータベース接続を作成します")
-                self.bot.db = sqlite3.connect(db_path)
-                self.bot.db.row_factory = sqlite3.Row
-                
-                # 必要なテーブルが存在するか確認
-                cursor = self.bot.db.cursor()
-                cursor.execute("PRAGMA foreign_keys = ON")  # 外部キー制約を有効化
-                
-                # messages テーブルが存在するか確認
-                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='messages';")
-                if not cursor.fetchone():
-                    print("[DEBUG] messages テーブルが存在しないため、作成します")
-                    cursor.execute('''
-                        CREATE TABLE IF NOT EXISTS messages (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            channel_id TEXT NOT NULL,
-                            message_id TEXT NOT NULL UNIQUE,
-                            post_id INTEGER NOT NULL,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            FOREIGN KEY (post_id) REFERENCES thoughts (id) ON DELETE CASCADE
-                        )
-                    ''')
-                    self.bot.db.commit()
-                
-                # thoughts テーブルが存在するか確認
-                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='thoughts';")
-                if not cursor.fetchone():
-                    print("[DEBUG] thoughts テーブルが存在しないため、作成します")
-                    cursor.execute('''
-                        CREATE TABLE IF NOT EXISTS thoughts (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            user_id INTEGER NOT NULL,
-                            content TEXT NOT NULL,
-                            category TEXT,
-                            image_url TEXT,
-                            is_anonymous BOOLEAN DEFAULT 0,
-                            is_private BOOLEAN DEFAULT 0,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            display_name TEXT
-                        )
-                    ''')
-                    self.bot.db.commit()
-                
-                print("[DEBUG] データベース接続が確立されました")
+            # テーブルが存在するか確認し、なければ作成
+            cursor = conn.cursor()
             
-            return self.bot.db
+            # thoughts テーブル
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS thoughts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    content TEXT NOT NULL,
+                    category TEXT,
+                    image_url TEXT,
+                    is_anonymous BOOLEAN DEFAULT 0,
+                    is_private BOOLEAN DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    display_name TEXT
+                )
+            ''')
+            
+            # messages テーブル
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    channel_id TEXT NOT NULL,
+                    message_id TEXT NOT NULL UNIQUE,
+                    post_id INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (post_id) REFERENCES thoughts (id) ON DELETE CASCADE
+                )
+            ''')
+            
+            # attachments テーブル（必要な場合）
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS attachments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    post_id INTEGER NOT NULL,
+                    url TEXT NOT NULL,
+                    FOREIGN KEY (post_id) REFERENCES thoughts (id) ON DELETE CASCADE
+                )
+            ''')
+            
+            conn.commit()
+            return conn
             
         except Exception as e:
-            error_msg = f"[ERROR] データベース接続エラー: {e}"
-            print(error_msg)
+            print(f"[ERROR] データベース接続エラー: {e}")
             traceback.print_exc()
-            raise
+            # エラーが発生した場合は新しい接続を試みる
+            try:
+                conn = sqlite3.connect(':memory:')
+                print("[WARNING] メモリ内データベースにフォールバックしました")
+                return conn
+            except:
+                print("[CRITICAL] データベース接続に失敗しました")
+                raise
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
