@@ -12,6 +12,38 @@ class DeleteDM(commands.Cog):
         self.bot = bot
         print("DeleteDM cog が読み込まれました")
     
+    @app_commands.command(name="dm_delete", description="DMで送信したメッセージを削除します")
+    @app_commands.describe(message_id="削除するメッセージのID")
+    async def dm_delete(self, interaction: discord.Interaction, message_id: str):
+        """DMで送信したメッセージを削除します"""
+        # DMでのみ実行可能
+        if not isinstance(interaction.channel, discord.DMChannel):
+            await interaction.response.send_message(
+                "このコマンドはDMでのみ使用できます。",
+                ephemeral=True
+            )
+            return
+        
+        try:
+            # メッセージIDを数値に変換
+            message_id_int = int(message_id)
+        except ValueError:
+            await interaction.response.send_message(
+                "無効なメッセージIDです。",
+                ephemeral=True
+            )
+            return
+        
+        # メッセージ削除を実行
+        success, message = await self.delete_message_by_id(
+            interaction,
+            message_id_int,
+            interaction.user.id
+        )
+        
+        # 結果をユーザーに通知
+        await interaction.response.send_message(message, ephemeral=True)
+    
     def get_db_connection(self):
         """データベース接続を取得する（シンプル版）"""
         try:
@@ -143,23 +175,68 @@ class DeleteDM(commands.Cog):
         
         Args:
             interaction_or_message: discord.Interaction または discord.Message オブジェクト
-            message_id: 削除するメッセージID
+            message_id: 削除するメッセージID（整数）
             user_id: 削除を試みるユーザーID
         """
         print(f"[DEBUG] delete_message_by_id 開始: message_id={message_id}, user_id={user_id}")
         
+        db = None
         try:
             # チャンネルを取得
             if isinstance(interaction_or_message, discord.Interaction):
                 channel = interaction_or_message.channel
+                user = interaction_or_message.user
                 print(f"[DEBUG] Interactionからチャンネルを取得: {channel}")
             else:
                 channel = interaction_or_message.channel
+                user = interaction_or_message.author
                 print(f"[DEBUG] Messageからチャンネルを取得: {channel}")
             
-            # メッセージIDを文字列に変換
-            message_id_str = str(int(message_id))
-            print(f"[DEBUG] 検索対象のメッセージID: {message_id_str}")
+            # DMかどうか確認
+            if not isinstance(channel, discord.DMChannel):
+                return False, "このコマンドはDMでのみ使用できます。"
+            
+            print(f"[DEBUG] 検索対象のメッセージID: {message_id}")
+            
+            # データベースからメッセージ情報を取得
+            db = self.get_db_connection()
+            cursor = db.cursor()
+            
+            # メッセージを検索（ユーザーIDも確認）
+            cursor.execute('''
+                SELECT m.message_id, t.id as post_id, t.user_id
+                FROM messages m
+                JOIN thoughts t ON m.post_id = t.id
+                WHERE m.message_id = ? AND t.user_id = ?
+            ''', (str(message_id), user_id))
+            
+            message_info = cursor.fetchone()
+            
+            if not message_info:
+                return False, "メッセージが見つからないか、削除する権限がありません。"
+            
+            # メッセージを削除
+            try:
+                message = await channel.fetch_message(message_id)
+                if message:
+                    await message.delete()
+                
+                # データベースからも削除
+                cursor.execute('DELETE FROM messages WHERE message_id = ?', (str(message_id),))
+                cursor.execute('DELETE FROM thoughts WHERE id = ?', (message_info['post_id'],))
+                db.commit()
+                
+                return True, "メッセージを削除しました。"
+                
+            except discord.NotFound:
+                # メッセージが既に削除されている場合はデータベースから削除
+                cursor.execute('DELETE FROM messages WHERE message_id = ?', (str(message_id),))
+                cursor.execute('DELETE FROM thoughts WHERE id = ?', (message_info['post_id'],))
+                db.commit()
+                return True, "メッセージは既に削除されています。"
+                
+            except discord.Forbidden:
+                return False, "メッセージを削除する権限がありません。"
             
             # データベース接続を取得
             db = self.get_db_connection()
