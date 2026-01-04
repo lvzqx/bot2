@@ -10,27 +10,35 @@ class DeleteDM(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         try:
-            print(f"[DEBUG] メッセージ受信: {message.content}")
+            print(f"\n[DEBUG] メッセージ受信: {message.content}")
+            print(f"[DEBUG] メッセージID: {message.id}")
+            print(f"[DEBUG] 送信者: {message.author} (ID: {message.author.id})")
+            print(f"[DEBUG] チャンネルタイプ: {type(message.channel).__name__}")
             
             # ボット自身のメッセージは無視
             if message.author == self.bot.user:
+                print("[DEBUG] ボット自身のメッセージのため無視")
                 return
                 
             # DM以外は無視
             if not isinstance(message.channel, discord.DMChannel):
+                print(f"[DEBUG] DM以外のチャンネル ({message.channel}) のため無視")
                 return
                 
             content = message.content.strip()
-            print(f"[DEBUG] DMメッセージ: {content}")
+            print(f"[DEBUG] 処理開始 - メッセージ: {content}")
             
             # delete で始まるメッセージのみ処理
             if not content.lower().startswith(('delete ', '/delete ')):
+                print("[DEBUG] 削除コマンドではないため無視")
                 return
                 
             try:
                 # コマンドを解析
                 parts = content.split()
                 print(f"[DEBUG] コマンド解析 - パーツ: {parts}")
+                print(f"[DEBUG] データベースパス: {self.bot.db}")
+                print(f"[DEBUG] データベース接続状態: {'接続中' if self.bot.db else '未接続'}")
                 
                 if len(parts) < 2 or not parts[-1].isdigit():
                     help_msg = "```\n使い方:\n  delete [投稿ID]\n  \n例: delete 123\n```"
