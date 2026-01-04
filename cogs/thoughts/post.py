@@ -141,6 +141,7 @@ class Post(commands.Cog):
                     
                 except Exception as e:
                     print(f"[ERROR] データベース接続エラー: {e}")
+                    import traceback
                     traceback.print_exc()
                     await interaction.followup.send("❌ データベースに接続できませんでした。しばらくしてからもう一度お試しください。", ephemeral=True)
                     return
