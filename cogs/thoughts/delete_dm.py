@@ -49,8 +49,11 @@ class DeleteDM(commands.Cog):
     def get_db_connection(self):
         """データベース接続を取得する（シンプル版）"""
         try:
-            # データベースファイルのパスを取得（bot.pyと同じディレクトリを想定）
-            db_path = 'thoughts.db'
+            # データベースファイルのパスを絶対パスで指定
+            import os
+            db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'thoughts.db')
+            print(f"[DEBUG] データベースパス: {db_path}")
+            print(f"[DEBUG] ファイル存在確認: {os.path.exists(db_path)}")
             
             # データベースに接続（ファイルがなければ作成される）
             conn = sqlite3.connect(db_path)
