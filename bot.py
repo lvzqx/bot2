@@ -46,8 +46,8 @@ class ThoughtBot(commands.Bot):
             except Exception as e:
                 print(f'❌ Failed to load extension {ext}: {e}')
         
-        # コマンドツリーの同期
-        await self.tree.sync()
+        # コマンドツリーの同期（コメントアウト）
+        # await self.tree.sync()
         print('✅ コマンドツリーを同期しました')
 
     def init_db(self):
