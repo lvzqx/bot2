@@ -46,23 +46,44 @@ class DeleteDM(commands.Cog):
                 return
         
         # 削除処理を実行
-        success, result = await self.delete_message_by_id(message_id, message.author.id, message.channel)
+        success, result = await self.delete_message_by_id(message, message_id, message.author.id)
         
         # 削除結果を送信
         embed = discord.Embed(
             description=result,
-            color=discord.Color.blue() if success else discord.Color.red()
+            color=discord.Color.green() if success else discord.Color.red()
         )
-        await message.channel.send(embed=embed)
         
-        # 元のメッセージを削除
+        # 結果メッセージを送信（5秒後に削除）
         try:
-            await message.delete()
-        except:
-            pass  # メッセージ削除に失敗しても無視
+            response = await message.channel.send(embed=embed, delete_after=5.0)
+            # 元のメッセージを削除
+            try:
+                await message.delete()
+            except:
+                pass
+            
+            # 成功した場合は5秒後に結果メッセージも削除
+            if success:
+                await asyncio.sleep(5)
+                try:
+                    await response.delete()
+                except:
+                    pass
+                    
+        except Exception as e:
+            print(f"[ERROR] メッセージ送信中にエラー: {e}")
     
-    async def delete_message_by_id(self, message_id: int, user_id: int, channel: discord.DMChannel) -> Tuple[bool, str]:
-        """メッセージIDで削除する"""
+    async def delete_message_by_id(self, message: discord.Message, message_id: int, user_id: int) -> Tuple[bool, str]:
+        """DMでメッセージIDを指定して削除する
+        
+        Args:
+            message: discord.Message オブジェクト
+            message_id: 削除するメッセージID
+            user_id: 削除を試みるユーザーID
+        """
+        channel = message.channel
+            
         try:
             # データベースからメッセージ情報を取得
             db = self.get_db_connection()
@@ -92,9 +113,9 @@ class DeleteDM(commands.Cog):
             
             # メッセージを削除
             try:
-                channel = self.bot.get_channel(int(channel_id))
-                if channel:
-                    msg = await channel.fetch_message(int(message_id))
+                target_channel = self.bot.get_channel(int(channel_id))
+                if target_channel:
+                    msg = await target_channel.fetch_message(int(message_id))
                     if msg:
                         await msg.delete()
             except (discord.NotFound, discord.Forbidden):
@@ -137,7 +158,10 @@ class DeleteDM(commands.Cog):
                 raise
                 
         except Exception as e:
-            return False, f"❌ エラーが発生しました: {str(e)}"
+            error_msg = f"❌ エラーが発生しました: {type(e).__name__}: {str(e)}"
+            print(f"[ERROR] {error_msg}")
+            traceback.print_exc()
+            return False, error_msg
 
 async def setup(bot):
     await bot.add_cog(DeleteDM(bot))

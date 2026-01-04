@@ -103,10 +103,16 @@ class Delete(commands.Cog):
     @app_commands.command(name="delete", description="メッセージIDまたはメッセージリンクで投稿を削除します")
     @app_commands.describe(message_reference="削除するメッセージのIDまたはメッセージリンク")
     async def delete(self, interaction: discord.Interaction, message_reference: str):
-        """メッセージIDまたはメッセージリンクで投稿を削除します"""
-        # DMの場合は処理をスキップ（delete_dm.pyで処理）
+        """メッセージIDまたはメッセージリンクで投稿を削除します（DMでも使用可能）"""
+        
+        # DMの場合は通常のメッセージとして処理
         if isinstance(interaction.channel, discord.DMChannel):
-            await interaction.response.send_message("DMではこのコマンドは使用できません。削除したいメッセージのIDまたはリンクを送信してください。", ephemeral=True)
+            success, result = await self.delete_message_by_id(
+                int(message_reference) if message_reference.isdigit() else message_reference,
+                interaction.user.id,
+                interaction.channel
+            )
+            await interaction.response.send_message(result, ephemeral=True)
             return
             
         await interaction.response.defer(ephemeral=True)
