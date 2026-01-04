@@ -26,24 +26,15 @@ class DeleteDM(commands.Cog):
         if message.author == self.bot.user:
             return
             
-        # メッセージリンクまたはメッセージIDを抽出
+        # メッセージIDを抽出
         content = message.content.strip()
         
-        # メッセージリンクからメッセージIDを抽出
-        if 'discord.com/channels/' in content:
-            try:
-                # メッセージIDを抽出
-                message_id = int(content.split('/')[-1])
-            except (ValueError, IndexError):
-                await message.channel.send("❌ 無効なメッセージリンクです。削除したいメッセージのIDまたはリンクを送信してください。")
-                return
-        else:
-            # メッセージIDとして処理
-            try:
-                message_id = int(content)
-            except ValueError:
-                # メッセージIDでもリンクでもない場合は無視
-                return
+        # メッセージIDを数値に変換
+        try:
+            message_id = int(content)
+        except ValueError:
+            # 数値でない場合は無視
+            return
         
         # 削除処理を実行
         success, result = await self.delete_message_by_id(message, message_id, message.author.id)
@@ -74,15 +65,18 @@ class DeleteDM(commands.Cog):
         except Exception as e:
             print(f"[ERROR] メッセージ送信中にエラー: {e}")
     
-    async def delete_message_by_id(self, message: discord.Message, message_id: int, user_id: int) -> Tuple[bool, str]:
+    async def delete_message_by_id(self, interaction_or_message, message_id: int, user_id: int) -> Tuple[bool, str]:
         """DMでメッセージIDを指定して削除する
         
         Args:
-            message: discord.Message オブジェクト
+            interaction_or_message: discord.Interaction または discord.Message オブジェクト
             message_id: 削除するメッセージID
             user_id: 削除を試みるユーザーID
         """
-        channel = message.channel
+        if isinstance(interaction_or_message, discord.Interaction):
+            channel = interaction_or_message.channel
+        else:
+            channel = interaction_or_message.channel
             
         try:
             # データベースからメッセージ情報を取得
