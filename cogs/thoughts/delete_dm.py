@@ -143,14 +143,20 @@ class DeleteDM(commands.Cog):
             # データベースの全メッセージを表示（デバッグ用）
             print("[DEBUG] データベース内の全メッセージ:")
             cursor.execute('''
-                SELECT m.message_id, t.user_id, m.channel_id, t.content
+                SELECT m.id as db_id, m.message_id, t.user_id, m.channel_id, t.content, t.id as post_id
                 FROM messages m
                 JOIN thoughts t ON m.post_id = t.id
+                WHERE t.user_id = ?
                 ORDER BY m.id DESC
                 LIMIT 10
-            ''')
-            for row in cursor.fetchall():
-                print(f"[DEBUG] メッセージ: id={row[0]}, user_id={row[1]}, channel_id={row[2]}, content={row[3][:50]}...")
+            ''', (user_id,))
+            db_messages = cursor.fetchall()
+            print(f"[DEBUG] ユーザー {user_id} のメッセージ件数: {len(db_messages)}")
+            for row in db_messages:
+                msg_id = row['message_id']
+                print(f"[DEBUG] メッセージ: db_id={row['db_id']}, msg_id='{msg_id}' (型: {type(msg_id)}), "
+                      f"post_id={row['post_id']}, user_id={row['user_id']}, "
+                      f"channel_id={row['channel_id']}, content='{row['content'][:30]}...'")
             
             # メッセージを検索（ユーザーIDも確認）
             print(f"[DEBUG] データベース検索: message_id={message_id}, user_id={user_id}")
@@ -158,12 +164,16 @@ class DeleteDM(commands.Cog):
             # メッセージIDとユーザーIDで検索（型を考慮）
             print(f"[DEBUG] データベース検索開始: message_id={message_id} (型: {type(message_id)}), user_id={user_id}")
             
-            # メッセージIDの型に関わらず検索できるように、両方の型で試す
+            # DM専用の削除処理（チャンネルIDはチェックしない）
+            print(f"[DEBUG] DM専用削除処理を開始: message_id={message_id}, user_id={user_id}")
+            
+            # メッセージIDの型に関わらず検索（文字列と数値の両方で試す）
             cursor.execute('''
                 SELECT m.message_id, t.id as post_id, t.user_id, m.channel_id, t.content
                 FROM messages m
                 JOIN thoughts t ON m.post_id = t.id
-                WHERE (m.message_id = ? OR m.message_id = ?) AND t.user_id = ?
+                WHERE (m.message_id = ? OR m.message_id = ?) 
+                AND t.user_id = ?
             ''', (str(message_id), int(message_id), user_id))
             
             # 検索結果を取得して表示（デバッグ用）
@@ -180,34 +190,65 @@ class DeleteDM(commands.Cog):
                 print("[DEBUG] メッセージが見つからないか、削除する権限がありません")
                 return False, "メッセージが見つからないか、削除する権限がありません。"
             
-            # メッセージを削除
+            # ボットが送信したメッセージを削除
             try:
                 # メッセージIDを文字列に変換
                 message_id_str = str(message_id)
                 print(f"[DEBUG] 削除を試みるメッセージID: {message_id_str}")
                 
-                # データベースから削除
-                cursor.execute('DELETE FROM messages WHERE message_id = ?', (message_id_str,))
-                cursor.execute('DELETE FROM thoughts WHERE id = ?', (message_info['post_id'],))
-                db.commit()
-                print("[DEBUG] データベースから削除しました")
-                
-                # Discordからメッセージを削除
+                # DMでメッセージを取得して削除を試みる
                 try:
-                    message = await channel.fetch_message(int(message_id_str))
-                    if message:
-                        await message.delete()
-                        print("[DEBUG] Discordメッセージを削除しました")
-                        return True, "メッセージを削除しました。"
+                    print(f"[DEBUG] DMからメッセージを取得中: message_id={message_id_str}")
+                    
+                    # DMチャンネルからメッセージを取得
+                    try:
+                        message = await interaction.channel.fetch_message(int(message_id_str))
+                        print(f"[DEBUG] メッセージ取得成功: {message.id} (author: {message.author}, content: {message.content[:50]}...)")
+                        
+                        # メッセージの送信者がボット自身であることを確認
+                        if message.author.id != self.bot.user.id:
+                            print("[DEBUG] エラー: ボットが送信したメッセージではありません")
+                            return False, "ボットが送信したメッセージのみ削除できます。"
+                            
+                    except discord.NotFound:
+                        print("[DEBUG] メッセージが見つかりませんでした")
+                        # データベースからは削除を試みる
+                        cursor.execute('DELETE FROM messages WHERE message_id = ?', (message_id_str,))
+                        cursor.execute('DELETE FROM thoughts WHERE id = ?', (message_info['post_id'],))
+                        db.commit()
+                        return True, "メッセージは既に削除されています。"
+                        
+                    except Exception as e:
+                        print(f"[DEBUG] メッセージ取得中にエラーが発生: {str(e)}")
+                        return False, f"メッセージの取得中にエラーが発生しました: {str(e)}"
+                    
+                    # メッセージを削除
+                    await message.delete()
+                    print("[DEBUG] Discordメッセージを削除しました")
+                    
+                    # データベースからも削除
+                    cursor.execute('DELETE FROM messages WHERE message_id = ?', (message_id_str,))
+                    cursor.execute('DELETE FROM thoughts WHERE id = ?', (message_info['post_id'],))
+                    db.commit()
+                    print("[DEBUG] データベースから削除しました")
+                    
+                    return True, "メッセージを削除しました。"
+                    
                 except discord.NotFound:
                     print("[DEBUG] メッセージは既に削除されています")
+                    # メッセージが既に削除されている場合でも、データベースからは削除する
+                    cursor.execute('DELETE FROM messages WHERE message_id = ?', (message_id_str,))
+                    cursor.execute('DELETE FROM thoughts WHERE id = ?', (message_info['post_id'],))
+                    db.commit()
                     return True, "メッセージは既に削除されています。"
+                    
                 except discord.Forbidden:
                     print("[DEBUG] メッセージ削除の権限がありません")
                     return False, "メッセージを削除する権限がありません。"
+                    
                 except Exception as e:
                     print(f"[DEBUG] メッセージ削除中にエラーが発生: {e}")
-                    return True, "データベースからは削除しましたが、メッセージの削除に失敗しました。"
+                    return False, f"メッセージの削除中にエラーが発生しました: {str(e)}"
                     
             except Exception as e:
                 db.rollback()
