@@ -14,8 +14,6 @@ class AutoDelete(commands.Cog):
             "消えろ",
             "消えなさい"
         ]
-        # 削除対象のメッセージの有効期限（秒）
-        self.max_message_age = 300  # 5分
         print("AutoDelete cog が読み込まれました")
 
     @commands.Cog.listener()
@@ -42,10 +40,6 @@ class AutoDelete(commands.Cog):
             # メッセージを検索して削除
             found = False
             async for msg in message.channel.history(limit=100):
-                # 古すぎるメッセージは無視
-                if (discord.utils.utcnow() - msg.created_at).total_seconds() > self.max_message_age:
-                    continue
-                    
                 if msg.id == message_id and msg.author == self.bot.user:
                     # 埋め込みメッセージの場合はデータベースからも削除
                     if msg.embeds and msg.embeds[0].footer and 'ID:' in msg.embeds[0].footer.text:
@@ -81,7 +75,7 @@ class AutoDelete(commands.Cog):
             
             # メッセージが見つからない場合
             if not found:
-                not_found = await message.channel.send("❌ 削除対象のメッセージが見つかりませんでした。5分以内のメッセージにのみ有効です。", delete_after=5.0)
+                not_found = await message.channel.send("❌ 削除対象のメッセージが見つかりませんでした。", delete_after=5.0)
                 await asyncio.sleep(5)
                 try:
                     await message.delete()
