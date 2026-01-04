@@ -23,6 +23,19 @@ class Delete(commands.Cog):
         try:
             # メッセージIDを文字列に変換
             message_id_str = str(int(message_id))
+            print(f"[DEBUG] 検索対象のメッセージID: {message_id_str}")
+            
+            # データベースからメッセージを検索
+            db = self.get_db_connection()
+            cursor = db.cursor()
+            cursor.execute('''
+                SELECT * FROM messages 
+                WHERE message_id = ?
+            ''', (message_id_str,))
+            
+            message_data = cursor.fetchone()
+            if not message_data:
+                return False, "❌ メッセージが見つかりませんでした。"
             
             # メッセージを取得
             try:

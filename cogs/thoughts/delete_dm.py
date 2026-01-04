@@ -83,12 +83,19 @@ class DeleteDM(commands.Cog):
             db = self.get_db_connection()
             cursor = db.cursor()
             
-            # メッセージIDが文字列の場合に備えて整数に変換
+            # メッセージIDを文字列に変換
             message_id_str = str(int(message_id))
+            print(f"[DEBUG] 検索対象のメッセージID: {message_id_str}")
             
+            # 存在するテーブルを確認
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            tables = cursor.fetchall()
+            print(f"[DEBUG] 利用可能なテーブル: {tables}")
+            
+            # メッセージIDで検索
             cursor.execute('''
                 SELECT channel_id, message_id, post_id 
-                FROM message_references 
+                FROM messages 
                 WHERE message_id = ?
             ''', (message_id_str,))
             
