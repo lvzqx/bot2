@@ -14,11 +14,15 @@ class DeleteDM(commands.Cog):
             print(f"[DEBUG] メッセージID: {message.id}")
             print(f"[DEBUG] 送信者: {message.author} (ID: {message.author.id})")
             print(f"[DEBUG] チャンネルタイプ: {type(message.channel).__name__}")
+            print(f"[DEBUG] ボットユーザー: {self.bot.user}")
+            print(f"[DEBUG] データベース接続: {hasattr(self.bot, 'db')}")
+            if hasattr(self.bot, 'db'):
+                print(f"[DEBUG] データベースパス: {self.bot.db}")
             
-            # ボット自身のメッセージは無視
-            if message.author == self.bot.user:
-                print("[DEBUG] ボット自身のメッセージのため無視")
-                return
+            # ボット自身のメッセージは無視しない（削除コマンドを処理するため）
+            # if message.author == self.bot.user:
+            #     print("[DEBUG] ボット自身のメッセージのため無視")
+            #     return
                 
             # DM以外は無視
             if not isinstance(message.channel, discord.DMChannel):
@@ -54,14 +58,24 @@ class DeleteDM(commands.Cog):
                 print("[DEBUG] データベーストランザクションを開始します")
                 try:
                     # データベース接続を明示的に取得
-                    db = self.bot.db
-                    if not db:
-                        print("[ERROR] データベース接続が確立されていません")
+                    if not hasattr(self.bot, 'db') or not self.bot.db:
+                        error_msg = "[ERROR] データベース接続が確立されていません"
+                        print(error_msg)
                         await message.channel.send("❌ データベースエラーが発生しました。", delete_after=10)
                         return
                         
+                    db = self.bot.db
                     cursor = db.cursor()
                     print("[DEBUG] データベース接続を取得しました")
+                    
+                    # データベースが操作可能か確認
+                    try:
+                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                        tables = cursor.fetchall()
+                        print(f"[DEBUG] 利用可能なテーブル: {tables}")
+                    except Exception as e:
+                        print(f"[ERROR] データベース接続確認エラー: {e}")
+                        raise
                     
                     # 1. 投稿の存在確認
                     print(f"[DEBUG] 投稿を検索中: post_id={post_id}, user_id={user_id}")
