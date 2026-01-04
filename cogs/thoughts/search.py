@@ -126,12 +126,12 @@ class Search(commands.Cog):
             # 検索結果を追加
             embeds.append(embed)
         
-        # ページネーションで表示
+        # ページネーションで表示（エフェメラルメッセージ）
         if embeds:
             view = PaginationView(embeds, 0)
-            await interaction.followup.send(embed=embeds[0], view=view)
+            await interaction.followup.send(embed=embeds[0], view=view, ephemeral=True)
         else:
-            await interaction.followup.send("表示できる投稿がありません。")
+            await interaction.followup.send("表示できる投稿がありません。", ephemeral=True)
 
 class PaginationView(discord.ui.View):
     def __init__(self, embeds, current_page):

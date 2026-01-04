@@ -94,9 +94,12 @@ class List(commands.Cog):
                     
                     pages.append(embed)
                 
-                # ページネーションで表示
-                view = PaginationView(pages, 0)
-                await interaction.followup.send(embed=pages[0], view=view, ephemeral=True)
+                # ページネーションで表示（エフェメラルメッセージ）
+                if pages:
+                    view = PaginationView(pages, 0)
+                    await interaction.followup.send(embed=pages[0], view=view, ephemeral=True)
+                else:
+                    await interaction.followup.send("表示できる投稿がありません。", ephemeral=True)
                 
             except Exception as e:
                 print(f"データベースエラー: {e}")
