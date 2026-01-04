@@ -468,7 +468,7 @@ class DeleteDM(commands.Cog):
             
             if not interaction.response.is_done():
                 await interaction.response.send_message(
-                    f"エラーが発生しました: {str(e)}",
+                    "エラーが発生しました。もう一度お試しください。",
                     ephemeral=True
                 )
 
