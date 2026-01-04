@@ -71,6 +71,10 @@ class Post(commands.Cog):
 
 
         async def on_submit(self, interaction: discord.Interaction):
+            # 既に応答済みかチェック
+            if interaction.response.is_done():
+                return
+                
             try:
                 # 即座に応答して処理中であることを伝える
                 await interaction.response.defer(ephemeral=True)
@@ -361,8 +365,9 @@ class Post(commands.Cog):
                             error_msg = "DMを送信できませんでした。DMの設定を確認してください。"
                         embed.add_field(name='エラー', value=error_msg, inline=False)
                     
-                    # ユーザーに確認メッセージを送信
-                    await interaction.followup.send(embed=embed, ephemeral=True)
+                    # 既に応答済みでないことを確認してから送信
+                    if not interaction.response.is_done():
+                        await interaction.followup.send(embed=embed, ephemeral=True)
                     
                 except Exception as e:
                     self.bot.db.rollback()
