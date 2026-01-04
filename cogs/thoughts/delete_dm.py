@@ -133,12 +133,24 @@ class DeleteDM(commands.Cog):
             db = self.get_db_connection()
             cursor = db.cursor()
             
+            # データベースの全メッセージを表示（デバッグ用）
+            print("[DEBUG] データベース内の全メッセージ:")
+            cursor.execute('''
+                SELECT m.message_id, t.user_id, m.channel_id, t.content
+                FROM messages m
+                JOIN thoughts t ON m.post_id = t.id
+                ORDER BY m.id DESC
+                LIMIT 10
+            ''')
+            for row in cursor.fetchall():
+                print(f"[DEBUG] メッセージ: id={row[0]}, user_id={row[1]}, channel_id={row[2]}, content={row[3][:50]}...")
+            
             # メッセージを検索（ユーザーIDも確認）
             print(f"[DEBUG] データベース検索: message_id={message_id}, user_id={user_id}")
             
             # メッセージIDとユーザーIDで検索
             cursor.execute('''
-                SELECT m.message_id, t.id as post_id, t.user_id, m.channel_id
+                SELECT m.message_id, t.id as post_id, t.user_id, m.channel_id, t.content
                 FROM messages m
                 JOIN thoughts t ON m.post_id = t.id
                 WHERE m.message_id = ? AND t.user_id = ?
