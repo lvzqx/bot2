@@ -57,14 +57,19 @@ class Delete(commands.Cog):
             try:
                 cursor.execute('BEGIN TRANSACTION')
                 
-                # 投稿の存在確認
+                # 投稿の存在確認と所有者チェック
                 cursor.execute('''
-                    SELECT id FROM thoughts 
-                    WHERE id = ? AND user_id = ?
-                ''', (post_id, user_id))
+                    SELECT id, user_id FROM thoughts 
+                    WHERE id = ?
+                ''', (post_id,))
                 
-                if not cursor.fetchone():
-                    return False, "❌ 投稿が見つからないか、削除する権限がありません"
+                post = cursor.fetchone()
+                if not post:
+                    return False, "❌ 投稿が見つかりません"
+                    
+                # 投稿の所有者とコマンド実行者が一致するか確認
+                if post['user_id'] != user_id:
+                    return False, "❌ 自分の投稿のみ削除できます"
                 
                 # 投稿を削除
                 cursor.execute('''

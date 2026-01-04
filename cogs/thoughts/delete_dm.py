@@ -76,7 +76,7 @@ class DeleteDM(commands.Cog):
             
             message_data = cursor.fetchone()
             if not message_data:
-                return False, "❌ メッセージが見つかりませんでした"
+                return False, "❌ メッセージが見つかりませんでした。メッセージIDまたはリンクが正しいか確認してください。"
             
             channel_id = message_data['channel_id']
             post_id = message_data['post_id']
@@ -88,7 +88,7 @@ class DeleteDM(commands.Cog):
             ''', (post_id, user_id))
             
             if not cursor.fetchone():
-                return False, "❌ この投稿を削除する権限がありません"
+                return False, "❌ この投稿を削除する権限がありません。自分の投稿のみ削除できます。"
             
             # メッセージを削除
             try:
@@ -109,6 +109,12 @@ class DeleteDM(commands.Cog):
                     DELETE FROM message_references 
                     WHERE message_id = ?
                 ''', (str(message_id),))
+                
+                # 添付ファイルを削除（存在する場合）
+                cursor.execute('''
+                    DELETE FROM attachments 
+                    WHERE thought_id = ?
+                ''', (post_id,))
                 
                 # 他のメッセージ参照がなければ投稿も削除
                 cursor.execute('''
