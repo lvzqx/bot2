@@ -23,10 +23,13 @@ class List(commands.Cog):
             cursor = self.bot.db.cursor()
             try:
                 cursor.execute('''
-                    SELECT id, content, category, created_at, is_private, display_name
-                    FROM thoughts 
-                    WHERE user_id = ?
-                    ORDER BY created_at DESC
+                    SELECT t.id, t.content, t.category, t.created_at, t.is_private, t.display_name,
+                           GROUP_CONCAT(a.url, '|') as attachments
+                    FROM thoughts t
+                    LEFT JOIN attachments a ON t.id = a.thought_id
+                    WHERE t.user_id = ?
+                    GROUP BY t.id
+                    ORDER BY t.created_at DESC
                     LIMIT ?
                 ''', (interaction.user.id, limit))
                 
@@ -41,18 +44,22 @@ class List(commands.Cog):
                     return await interaction.followup.send(embed=embed, ephemeral=True)
                 
                 # ページネーションの設定
-                items_per_page = 5
+                items_per_page = 3  # 画像表示のため1ページあたりの表示数を減らす
                 pages = []
                 
                 for i in range(0, len(posts), items_per_page):
                     embed = discord.Embed(
                         title=f"📋 {interaction.user.display_name} さんの投稿一覧",
-                        description="削除するには `/delete 投稿ID` を使用してください。",
                         color=discord.Color.blue()
                     )
                     
                     for post in posts[i:i + items_per_page]:
-                        post_id, content, category, created_at, is_private, display_name = post
+                        post_id = post['id']
+                        content = post['content']
+                        category = post['category']
+                        is_private = post['is_private']
+                        display_name = post['display_name']
+                        attachments = post['attachments'].split('|') if post['attachments'] else []
                         
                         # 内容が長すぎる場合は省略
                         display_content = content[:100] + '...' if len(content) > 100 else content
@@ -63,11 +70,22 @@ class List(commands.Cog):
                         if is_private:
                             field_value += "🔒 非公開\n"
                         
+                        # 画像がある場合は最初の1枚をサムネイルとして表示
+                        image_urls = [url for url in attachments if url.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))]
+                        if image_urls:
+                            field_value += "\n🖼️ 画像が添付されています"
+                            if len(image_urls) > 1:
+                                field_value += f" ({len(image_urls)}枚)"
+                        
                         embed.add_field(
                             name=f"ID: {post_id}",
                             value=field_value,
                             inline=False
                         )
+                        
+                        # 最初の画像をサムネイルとして追加
+                        if image_urls:
+                            embed.set_thumbnail(url=image_urls[0])
                     
                     pages.append(embed)
                 

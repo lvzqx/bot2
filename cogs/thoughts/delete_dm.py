@@ -1,14 +1,14 @@
 import discord
 from discord.ext import commands
 import sqlite3
-import traceback
-from typing import Optional, Tuple, List, Dict, Any, Union
+import re
+from typing import Tuple, Optional
 
 class DeleteDM(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         print("DeleteDM cog が読み込まれました")
-
+    
     def get_db_connection(self):
         """データベース接続を取得する"""
         if not hasattr(self.bot, 'db'):
@@ -16,113 +16,109 @@ class DeleteDM(commands.Cog):
             self.bot.db.row_factory = sqlite3.Row
         return self.bot.db
 
-    async def delete_post(self, post_id: int, user_id: int, channel: discord.DMChannel) -> Tuple[bool, str]:
-        """投稿を削除する"""
-        db = self.get_db_connection()
-        cursor = db.cursor()
-        
-        try:
-            # トランザクション開始
-            cursor.execute('BEGIN TRANSACTION')
-            
-            # 1. 投稿の存在確認
-            cursor.execute('''
-                SELECT id, is_private FROM thoughts 
-                WHERE id = ? AND user_id = ?
-            ''', (post_id, user_id))
-            post = cursor.fetchone()
-            
-            if not post:
-                return False, "投稿が見つからないか、削除する権限がありません"
-            
-            # 2. メッセージ参照を取得
-            cursor.execute('''
-                SELECT message_id, channel_id FROM message_references 
-                WHERE post_id = ?
-            ''', (post_id,))
-            msg_ref = cursor.fetchone()
-            
-            # 3. 投稿を削除
-            cursor.execute('''
-                DELETE FROM thoughts 
-                WHERE id = ? AND user_id = ?
-            ''', (post_id, user_id))
-            
-            # 4. メッセージ参照を削除
-            if msg_ref:
-                cursor.execute('''
-                    DELETE FROM message_references 
-                    WHERE post_id = ?
-                ''', (post_id,))
-            
-            # 変更をコミット
-            db.commit()
-            
-            # 5. DM内の埋め込みメッセージを削除
-            deleted = False
-            async for msg in channel.history(limit=100):
-                if msg.embeds and msg.embeds[0].footer and f"ID: {post_id}" in msg.embeds[0].footer.text:
-                    await msg.delete()
-                    deleted = True
-                    break
-            
-            if deleted:
-                return True, f"✅ 投稿 (ID: {post_id}) を削除しました"
-            else:
-                return True, f"⚠️ 投稿は削除されましたが、メッセージが見つかりませんでした (ID: {post_id})"
-                
-        except Exception as e:
-            db.rollback()
-            error_msg = f"エラーが発生しました: {type(e).__name__}: {str(e)}"
-            print(f"[ERROR] {error_msg}")
-            traceback.print_exc()
-            return False, f"❌ {error_msg}"
-
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         # DM以外は無視
         if not isinstance(message.channel, discord.DMChannel):
             return
             
-        # ボット自身のメッセージは無視
+        # ボットのメッセージは無視
         if message.author == self.bot.user:
             return
-                
-        # メッセージを小文字に変換して処理
-        content = message.content.strip().lower()
+            
+        # メッセージリンクまたはメッセージIDを抽出
+        content = message.content.strip()
         
-        # delete で始まるメッセージのみ処理
-        if not content.startswith(('delete ', '/delete ')):
-            return
-            
-        try:
-            # コマンドを解析
-            parts = content.split()
-            
-            # ヘルプ表示
-            if len(parts) < 2 or not parts[-1].isdigit():
-                help_msg = "```\n使い方:\n  delete [投稿ID]\n  \n例: delete 123\n```"
-                await message.channel.send(help_msg, delete_after=15)
+        # メッセージリンクからメッセージIDを抽出
+        if 'discord.com/channels/' in content:
+            try:
+                message_id = int(content.split('/')[-1])
+            except (ValueError, IndexError):
+                await message.channel.send("❌ 無効なメッセージリンクです。")
                 return
+        else:
+            # メッセージIDとして処理
+            try:
+                message_id = int(content)
+            except ValueError:
+                # メッセージIDでもリンクでもない場合は無視
+                return
+        
+        # メッセージIDで削除を試みる
+        success, result = await self.delete_message_by_id(message_id, message.author.id, message.channel)
+        await message.channel.send(result)
+    
+    async def delete_message_by_id(self, message_id: int, user_id: int, channel: discord.DMChannel) -> Tuple[bool, str]:
+        """メッセージIDで削除する"""
+        try:
+            # データベースからメッセージ情報を取得
+            db = self.get_db_connection()
+            cursor = db.cursor()
+            
+            cursor.execute('''
+                SELECT channel_id, message_id, post_id 
+                FROM message_references 
+                WHERE message_id = ?
+            ''', (str(message_id),))
+            
+            message_data = cursor.fetchone()
+            if not message_data:
+                return False, "❌ メッセージが見つかりませんでした"
+            
+            channel_id = message_data['channel_id']
+            post_id = message_data['post_id']
+            
+            # 投稿の所有権を確認
+            cursor.execute('''
+                SELECT id FROM thoughts 
+                WHERE id = ? AND user_id = ?
+            ''', (post_id, user_id))
+            
+            if not cursor.fetchone():
+                return False, "❌ この投稿を削除する権限がありません"
+            
+            # メッセージを削除
+            try:
+                channel = self.bot.get_channel(int(channel_id))
+                if channel:
+                    msg = await channel.fetch_message(int(message_id))
+                    if msg:
+                        await msg.delete()
+            except (discord.NotFound, discord.Forbidden):
+                pass  # メッセージが既に削除されているか、権限がない場合は無視
+            
+            # データベースから削除
+            try:
+                cursor.execute('BEGIN TRANSACTION')
                 
-            # 投稿IDを取得
-            post_id = int(parts[-1])
-            
-            # 削除処理を実行
-            success, result = await self.delete_post(
-                post_id=post_id,
-                user_id=message.author.id,
-                channel=message.channel
-            )
-            
-            # 結果を送信
-            await message.channel.send(result, delete_after=15)
-            
+                # メッセージ参照を削除
+                cursor.execute('''
+                    DELETE FROM message_references 
+                    WHERE message_id = ?
+                ''', (str(message_id),))
+                
+                # 他のメッセージ参照がなければ投稿も削除
+                cursor.execute('''
+                    SELECT COUNT(*) as count 
+                    FROM message_references 
+                    WHERE post_id = ?
+                ''', (post_id,))
+                
+                if cursor.fetchone()['count'] == 0:
+                    cursor.execute('''
+                        DELETE FROM thoughts 
+                        WHERE id = ?
+                    ''', (post_id,))
+                
+                db.commit()
+                return True, f"✅ 投稿 (ID: {post_id}) を削除しました"
+                
+            except Exception as e:
+                db.rollback()
+                raise
+                
         except Exception as e:
-            error_msg = f"❌ エラーが発生しました: {type(e).__name__}: {str(e)}"
-            print(f"[ERROR] {error_msg}")
-            traceback.print_exc()
-            await message.channel.send(error_msg, delete_after=15)
+            return False, f"❌ エラーが発生しました: {str(e)}"
 
 async def setup(bot):
     await bot.add_cog(DeleteDM(bot))

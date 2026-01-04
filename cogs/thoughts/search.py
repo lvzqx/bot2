@@ -31,9 +31,12 @@ class Search(commands.Cog):
             SELECT 
                 t.id, t.content, t.category, t.created_at, 
                 t.display_name, t.user_id, t.is_anonymous, t.is_private,
-                t.image_url
+                t.image_url,
+                GROUP_CONCAT(a.url, '|') as attachments
             FROM thoughts t
+            LEFT JOIN attachments a ON t.id = a.thought_id
             WHERE 1=1
+            GROUP BY t.id
         """
         params = []
         
@@ -72,7 +75,9 @@ class Search(commands.Cog):
         # 結果を表示
         embeds = []
         for post in posts:
-            post_id, content, category, created_at, display_name, post_user_id, is_anonymous, is_private, image_url = post
+            post_id, content, category, created_at, display_name, post_user_id, is_anonymous, is_private, image_url, attachments_str = post
+            attachments = attachments_str.split('|') if attachments_str and attachments_str != 'None' else []
+            image_urls = [url for url in attachments if url.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))]
             created_at_dt = datetime.fromisoformat(created_at)
             
             # 投稿者情報を設定
@@ -105,8 +110,10 @@ class Search(commands.Cog):
             
             embed.set_footer(text=footer_text)
             
-            # 画像がある場合は追加
-            if image_url:
+            # 画像がある場合は最初の1枚のみ表示
+            if image_urls:
+                embed.set_image(url=image_urls[0])
+            elif image_url:  # 旧形式の画像URLがある場合
                 embed.set_image(url=image_url)
             
             # 検索結果を追加
