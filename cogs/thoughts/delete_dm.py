@@ -1,7 +1,9 @@
+import asyncio
 import discord
 from discord.ext import commands
 import sqlite3
 import re
+import traceback
 from typing import Tuple, Optional
 
 class DeleteDM(commands.Cog):
@@ -84,40 +86,43 @@ class DeleteDM(commands.Cog):
             message_id: 削除するメッセージID
             user_id: 削除を試みるユーザーID
         """
+        print(f"[DEBUG] delete_message_by_id 開始: message_id={message_id}, user_id={user_id}")
+        
         try:
-            print(f"[DEBUG] delete_message_by_id 開始: message_id={message_id}, user_id={user_id}")
-            
+            # チャンネルを取得
             if isinstance(interaction_or_message, discord.Interaction):
                 channel = interaction_or_message.channel
                 print(f"[DEBUG] Interactionからチャンネルを取得: {channel}")
             else:
                 channel = interaction_or_message.channel
                 print(f"[DEBUG] Messageからチャンネルを取得: {channel}")
-                
-            # データベースからメッセージ情報を取得
-            db = self.get_db_connection()
-            cursor = db.cursor()
             
             # メッセージIDを文字列に変換
             message_id_str = str(int(message_id))
             print(f"[DEBUG] 検索対象のメッセージID: {message_id_str}")
             
+            # データベース接続を取得
+            db = self.get_db_connection()
+            cursor = db.cursor()
+            
             # 存在するテーブルを確認
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-            tables = cursor.fetchall()
+            tables = [row[0] for row in cursor.fetchall()]
             print(f"[DEBUG] 利用可能なテーブル: {tables}")
             
             # メッセージIDで検索
             try:
+                print("[DEBUG] データベースクエリを実行")
                 cursor.execute('''
                     SELECT channel_id, message_id, post_id 
                     FROM messages 
                     WHERE message_id = ?
                 ''', (message_id_str,))
-                print("[DEBUG] データベースクエリを実行")
             except Exception as e:
-                print(f"[ERROR] データベースクエリエラー: {e}")
-                raise
+                error_msg = f"[ERROR] データベースクエリエラー: {e}"
+                print(error_msg)
+                traceback.print_exc()
+                return False, "❌ データベースエラーが発生しました。しばらくしてからもう一度お試しください。"
             
             message_data = cursor.fetchone()
             if not message_data:
