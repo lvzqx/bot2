@@ -197,40 +197,50 @@ async def sync(ctx):
         await ctx.send(f"❌ エラー: {e}")
 
 # ヘルプコマンド（スラッシュコマンドのみ）
-@bot.tree.command(name='help', description='利用可能なコマンドを表示します')
+@bot.tree.command(name="help", description="利用可能なコマンドを表示します")
 async def help_command(interaction: discord.Interaction):
+    """利用可能なコマンドを表示します"""
     try:
-        # シンプルな応答を即座に返す
         embed = discord.Embed(
-            title='📚 利用可能なコマンド',
-            description='以下のコマンドが利用できます。',
+            title="🤖 利用可能なコマンド",
+            description="以下のコマンドが利用できます。",
             color=discord.Color.blue()
         )
         
-        # コマンドの説明を追加
-        commands_list = [
-            ('📝 投稿関連', '''
-            `/post` - 新しい投稿を作成
-            `/list [件数]` - 自分の投稿を一覧表示（デフォルト10件）
-            `/search [キーワード]` - 投稿を検索
-            `/delete [ID]` - 投稿を削除
-            `/edit [ID]` - 投稿を編集
-            ''')
-        ]
+        # コマンド一覧を追加
+        embed.add_field(
+            name="📝 投稿関連",
+            value=""" 
+            `/post` - 新しい投稿を作成します
+            `/edit [メッセージID]` - 投稿を編集します
+            `/delete [メッセージID]` - 投稿を削除します
+            `/dm_delete [メッセージID]` - DMで送信したメッセージを削除します
+            `/list [カテゴリ]` - 投稿の一覧を表示します
+            `/search [キーワード]` - 投稿を検索します
+            """,
+            inline=False
+        )
         
-        for name, value in commands_list:
-            embed.add_field(name=name, value=value, inline=False)
+        embed.add_field(
+            name="🔧 その他",
+            value=""" 
+            `/help` - このヘルプを表示します
+            `/sync` - コマンドを同期します（管理者のみ）
+            """,
+            inline=False
+        )
         
-        # 一度の応答で送信
+        # フッターに注意書きを追加
+        embed.set_footer(text="※ [ ] は必須パラメータです")
+        
         await interaction.response.send_message(embed=embed, ephemeral=True)
-        
     except Exception as e:
         print(f"Help command error: {e}")
         try:
-            await interaction.response.send_message("ヘルプの表示中にエラーが発生しました。", ephemeral=True)
+            if not interaction.response.is_done():
+                await interaction.response.send_message("ヘルプの表示中にエラーが発生しました。", ephemeral=True)
         except:
             pass
-    return
 
 # ボットを実行
 async def main():
