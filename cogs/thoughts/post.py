@@ -90,13 +90,42 @@ class Post(commands.Cog):
                 # データベーストランザクション開始
                 cursor = self.bot.db.cursor()
                 try:
-                    # テーブルが存在するか確認し、必要に応じてカラムを追加
+                    # データベースのテーブル一覧を表示
+                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+                    tables = cursor.fetchall()
+                    print(f"[DEBUG] 利用可能なテーブル: {tables}")
+                    
+                    # thoughtsテーブルが存在するか確認
+                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='thoughts';")
+                    if not cursor.fetchone():
+                        print("[DEBUG] thoughtsテーブルが存在しないため、作成します")
+                        cursor.execute('''
+                            CREATE TABLE IF NOT EXISTS thoughts (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                user_id INTEGER NOT NULL,
+                                content TEXT NOT NULL,
+                                category TEXT,
+                                image_url TEXT,
+                                is_anonymous BOOLEAN DEFAULT 0,
+                                is_private BOOLEAN DEFAULT 0,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                display_name TEXT
+                            )
+                        ''')
+                        self.bot.db.commit()
+                    
+                    # テーブルのカラム構造を確認
                     cursor.execute("PRAGMA table_info(thoughts)")
                     columns = [column[1] for column in cursor.fetchall()]
+                    print(f"[DEBUG] thoughtsテーブルのカラム: {columns}")
                     
+                    # 不足しているカラムを追加
                     if 'updated_at' not in columns:
+                        print("[DEBUG] updated_atカラムを追加します")
                         cursor.execute('ALTER TABLE thoughts ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
                     if 'display_name' not in columns:
+                        print("[DEBUG] display_nameカラムを追加します")
                         cursor.execute('ALTER TABLE thoughts ADD COLUMN display_name TEXT')
                     
                     # 現在の日時を取得
