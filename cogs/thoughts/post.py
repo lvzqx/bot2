@@ -276,13 +276,20 @@ class Post(commands.Cog):
                     
                     # ユーザーにエラーを通知（DMで送信）
                     try:
-                        await interaction.user.send(embed=error_embed)
+                        # await interaction.user.send(embed=error_embed)
+                        pass
                     except:
                         pass  # DMがブロックされている場合は無視
 
-    @app_commands.command(name="post", description="新しいメッセージを投稿します")
+    @app_commands.command(name="post", description="新しい投稿を作成します")
     async def post(self, interaction: discord.Interaction):
-        """新しいメッセージを投稿します"""
+        """新しい投稿を作成します"""
+        # DMの場合は無効化
+        if isinstance(interaction.channel, discord.DMChannel):
+            await interaction.response.send_message("❌ このコマンドはDMでは使用できません。サーバー内でお試しください。", ephemeral=True)
+            return
+            
+        # モーダルを表示
         modal = self.PostModal(bot=self.bot)
         await interaction.response.send_modal(modal)
 

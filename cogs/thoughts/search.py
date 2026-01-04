@@ -24,6 +24,11 @@ class Search(commands.Cog):
         user_id: str = None
     ):
         """投稿を検索します"""
+        # DMの場合は無効化
+        if isinstance(interaction.channel, discord.DMChannel):
+            await interaction.response.send_message("❌ このコマンドはDMでは使用できません。サーバー内でお試しください。", ephemeral=True)
+            return
+            
         await interaction.response.defer()
         
         # クエリの構築
@@ -63,10 +68,12 @@ class Search(commands.Cog):
         query += " ORDER BY t.created_at DESC LIMIT ?"
         params.append(min(limit, 25))  # 最大25件まで
         
-        # クエリ実行
+        # クエリ実行（明示的なトランザクションは使用しない）
         cursor = self.bot.db.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")  # 読み取りのパフォーマンスを向上
         cursor.execute(query, params)
         posts = cursor.fetchall()
+        cursor.close()  # 明示的にカーソルを閉じる
         
         if not posts:
             await interaction.followup.send("該当する投稿が見つかりませんでした。")

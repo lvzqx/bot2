@@ -12,6 +12,11 @@ class List(commands.Cog):
     @app_commands.describe(limit="表示する件数 (デフォルト: 10, 最大: 25)")
     async def list_posts(self, interaction: discord.Interaction, limit: int = 10):
         """自分の投稿一覧を表示します"""
+        # DMの場合は無効化
+        if isinstance(interaction.channel, discord.DMChannel):
+            await interaction.response.send_message("❌ このコマンドはDMでは使用できません。サーバー内でお試しください。", ephemeral=True)
+            return
+            
         try:
             # 即座に応答して処理中であることを伝える
             await interaction.response.defer(ephemeral=True)

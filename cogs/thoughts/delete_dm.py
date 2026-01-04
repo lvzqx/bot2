@@ -18,7 +18,7 @@ class DeleteDM(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        # DM以外は無視
+        # サーバー内のメッセージは無視
         if not isinstance(message.channel, discord.DMChannel):
             return
             
@@ -32,9 +32,10 @@ class DeleteDM(commands.Cog):
         # メッセージリンクからメッセージIDを抽出
         if 'discord.com/channels/' in content:
             try:
+                # メッセージIDを抽出
                 message_id = int(content.split('/')[-1])
             except (ValueError, IndexError):
-                await message.channel.send("❌ 無効なメッセージリンクです。")
+                await message.channel.send("❌ 無効なメッセージリンクです。削除したいメッセージのIDまたはリンクを送信してください。")
                 return
         else:
             # メッセージIDとして処理
@@ -44,9 +45,21 @@ class DeleteDM(commands.Cog):
                 # メッセージIDでもリンクでもない場合は無視
                 return
         
-        # メッセージIDで削除を試みる
+        # 削除処理を実行
         success, result = await self.delete_message_by_id(message_id, message.author.id, message.channel)
-        await message.channel.send(result)
+        
+        # 削除結果を送信
+        embed = discord.Embed(
+            description=result,
+            color=discord.Color.blue() if success else discord.Color.red()
+        )
+        await message.channel.send(embed=embed)
+        
+        # 元のメッセージを削除
+        try:
+            await message.delete()
+        except:
+            pass  # メッセージ削除に失敗しても無視
     
     async def delete_message_by_id(self, message_id: int, user_id: int, channel: discord.DMChannel) -> Tuple[bool, str]:
         """メッセージIDで削除する"""
