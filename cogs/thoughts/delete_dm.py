@@ -18,36 +18,47 @@ class DeleteDM(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        # サーバー内のメッセージは無視
-        if not isinstance(message.channel, discord.DMChannel):
-            return
-            
-        # ボットのメッセージは無視
-        if message.author == self.bot.user:
-            return
-            
-        # メッセージIDを抽出
-        content = message.content.strip()
-        
-        # メッセージIDを数値に変換
         try:
-            message_id = int(content)
-        except ValueError:
-            # 数値でない場合は無視
-            return
-        
-        # 削除処理を実行
-        success, result = await self.delete_message_by_id(message, message_id, message.author.id)
-        
-        # 削除結果を送信
-        embed = discord.Embed(
-            description=result,
-            color=discord.Color.green() if success else discord.Color.red()
-        )
-        
-        # 結果メッセージを送信（5秒後に削除）
-        try:
+            print(f"[DEBUG] 受信メッセージ: {message.content}")
+            
+            # サーバー内のメッセージは無視
+            if not isinstance(message.channel, discord.DMChannel):
+                print("[DEBUG] DMチャンネルではないためスキップ")
+                return
+                
+            # ボットのメッセージは無視
+            if message.author == self.bot.user:
+                print("[DEBUG] ボットのメッセージのためスキップ")
+                return
+                
+            # メッセージIDを抽出
+            content = message.content.strip()
+            print(f"[DEBUG] 処理対象のコンテンツ: {content}")
+            
+            # メッセージIDを数値に変換
+            try:
+                message_id = int(content)
+                print(f"[DEBUG] 抽出したメッセージID: {message_id}")
+            except ValueError:
+                # 数値でない場合は無視
+                print("[DEBUG] 数値に変換できないためスキップ")
+                return
+            
+            # 削除処理を実行
+            print("[DEBUG] delete_message_by_idを呼び出し")
+            success, result = await self.delete_message_by_id(message, message_id, message.author.id)
+            print(f"[DEBUG] 削除結果 - 成功: {success}, 結果: {result}")
+            
+            # 削除結果を送信
+            embed = discord.Embed(
+                description=result,
+                color=discord.Color.green() if success else discord.Color.red()
+            )
+            
+            # 結果メッセージを送信（5秒後に削除）
+            print("[DEBUG] 結果メッセージを送信")
             response = await message.channel.send(embed=embed, delete_after=5.0)
+            print("[DEBUG] 結果メッセージを送信完了")
             # 元のメッセージを削除
             try:
                 await message.delete()
@@ -73,12 +84,16 @@ class DeleteDM(commands.Cog):
             message_id: 削除するメッセージID
             user_id: 削除を試みるユーザーID
         """
-        if isinstance(interaction_or_message, discord.Interaction):
-            channel = interaction_or_message.channel
-        else:
-            channel = interaction_or_message.channel
-            
         try:
+            print(f"[DEBUG] delete_message_by_id 開始: message_id={message_id}, user_id={user_id}")
+            
+            if isinstance(interaction_or_message, discord.Interaction):
+                channel = interaction_or_message.channel
+                print(f"[DEBUG] Interactionからチャンネルを取得: {channel}")
+            else:
+                channel = interaction_or_message.channel
+                print(f"[DEBUG] Messageからチャンネルを取得: {channel}")
+                
             # データベースからメッセージ情報を取得
             db = self.get_db_connection()
             cursor = db.cursor()
@@ -93,11 +108,16 @@ class DeleteDM(commands.Cog):
             print(f"[DEBUG] 利用可能なテーブル: {tables}")
             
             # メッセージIDで検索
-            cursor.execute('''
-                SELECT channel_id, message_id, post_id 
-                FROM messages 
-                WHERE message_id = ?
-            ''', (message_id_str,))
+            try:
+                cursor.execute('''
+                    SELECT channel_id, message_id, post_id 
+                    FROM messages 
+                    WHERE message_id = ?
+                ''', (message_id_str,))
+                print("[DEBUG] データベースクエリを実行")
+            except Exception as e:
+                print(f"[ERROR] データベースクエリエラー: {e}")
+                raise
             
             message_data = cursor.fetchone()
             if not message_data:
