@@ -83,11 +83,14 @@ class DeleteDM(commands.Cog):
             db = self.get_db_connection()
             cursor = db.cursor()
             
+            # メッセージIDが文字列の場合に備えて整数に変換
+            message_id_str = str(int(message_id))
+            
             cursor.execute('''
                 SELECT channel_id, message_id, post_id 
                 FROM message_references 
                 WHERE message_id = ?
-            ''', (str(message_id),))
+            ''', (message_id_str,))
             
             message_data = cursor.fetchone()
             if not message_data:

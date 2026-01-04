@@ -21,9 +21,12 @@ class Delete(commands.Cog):
     async def delete_message_by_id(self, interaction: discord.Interaction, message_id: int) -> Tuple[bool, str]:
         """メッセージIDで削除する"""
         try:
+            # メッセージIDを文字列に変換
+            message_id_str = str(int(message_id))
+            
             # メッセージを取得
             try:
-                message = await interaction.channel.fetch_message(message_id)
+                message = await interaction.channel.fetch_message(int(message_id_str))
             except discord.NotFound:
                 return False, "❌ メッセージが見つかりませんでした"
             except discord.Forbidden:
