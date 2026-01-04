@@ -365,9 +365,8 @@ class Post(commands.Cog):
                             error_msg = "DMを送信できませんでした。DMの設定を確認してください。"
                         embed.add_field(name='エラー', value=error_msg, inline=False)
                     
-                    # 既に応答済みでないことを確認してから送信
-                    if not interaction.response.is_done():
-                        await interaction.followup.send(embed=embed, ephemeral=True)
+                    # ユーザーに確認メッセージを送信
+                    await interaction.followup.send(embed=embed, ephemeral=True)
                     
                 except Exception as e:
                     self.bot.db.rollback()

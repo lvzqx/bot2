@@ -180,16 +180,6 @@ class DeleteDM(commands.Cog):
                 # メッセージと投稿情報を結合して検索
                 print("[DEBUG] メッセージを検索中...")
                 
-                # まずはmessagesテーブルの内容を全て表示
-                cursor.execute("SELECT * FROM messages")
-                all_messages = cursor.fetchall()
-                print(f"[DEBUG] messagesテーブルの全レコード: {all_messages}")
-                
-                # thoughtsテーブルの内容も確認
-                cursor.execute("SELECT id, user_id FROM thoughts")
-                all_thoughts = cursor.fetchall()
-                print(f"[DEBUG] thoughtsテーブルの全レコード: {all_thoughts}")
-                
                 # メッセージを検索
                 cursor.execute('''
                     SELECT m.channel_id, m.message_id, m.post_id, t.user_id
@@ -198,85 +188,44 @@ class DeleteDM(commands.Cog):
                     WHERE m.message_id = ?
                 ''', (message_id_str,))
                 
-                message_data = cursor.fetchone()
-                print(f"[DEBUG] 検索結果: {message_data}")
-                
-                # 見つからない場合は、message_idを数値としても検索してみる
-                if not message_data and message_id_str.isdigit():
-                    print("[DEBUG] 文字列IDで見つからなかったため、数値IDで再検索します")
-                    cursor.execute('''
-                        SELECT m.channel_id, m.message_id, m.post_id, t.user_id
-                        FROM messages m
-                        JOIN thoughts t ON m.post_id = t.id
-                        WHERE CAST(m.message_id AS INTEGER) = ?
-                    ''', (int(message_id_str),))
-                    message_data = cursor.fetchone()
-                    print(f"[DEBUG] 数値IDでの検索結果: {message_data}")
-                
-                if not message_data:
-                    return False, "メッセージが見つかりませんでした。メッセージIDまたはリンクが正しいか確認してください。"
-                
-                # 投稿者を確認
-                if message_data['user_id'] != user_id:
+                message_info = cursor.fetchone()
+                if not message_info:
+                    return False, "メッセージが見つかりませんでした。"
+                    
+                # 投稿者チェック
+                if message_info['user_id'] != user_id:
                     return False, "このメッセージを削除する権限がありません。"
                 
-                # メッセージを削除
+                # データベーストランザクション開始
+                db.execute('BEGIN TRANSACTION')
+                
                 try:
-                    # データベースからメッセージ情報を取得
-                    cursor.execute('''
-                        SELECT m.channel_id, m.message_id, m.post_id, t.content, t.is_private
-                        FROM messages m
-                        JOIN thoughts t ON m.post_id = t.id
-                        WHERE m.message_id = ? AND t.user_id = ?
-                    ''', (message_id_str, user_id))
-                    
-                    message_info = cursor.fetchone()
-                    if not message_info:
-                        return False, "メッセージが見つからないか、削除する権限がありません。"
-                    
-                    # データベースから削除
+                    # メッセージを削除
                     cursor.execute('DELETE FROM messages WHERE message_id = ?', (message_id_str,))
                     cursor.execute('DELETE FROM thoughts WHERE id = ?', (message_info['post_id'],))
                     db.commit()
                     
-                    # 実際のメッセージを削除（可能な場合）
+                    # DMメッセージを削除
                     try:
-                        if message_info['is_private']:
-                            # DMのメッセージを削除
-                            user = await self.bot.fetch_user(user_id)
-                            if user:
-                                channel = user.dm_channel or await user.create_dm()
-                                try:
-                                    msg = await channel.fetch_message(int(message_id_str))
-                                    if msg:
-                                        await msg.delete()
-                                except (discord.NotFound, discord.Forbidden):
-                                    # メッセージが既に削除されているか、削除権限がない場合は無視
-                                    pass
-                        else:
-                            # パブリックチャンネルのメッセージを削除
-                            channel = self.bot.get_channel(int(message_info['channel_id']))
-                            if channel:
-                                try:
-                                    msg = await channel.fetch_message(int(message_id_str))
-                                    if msg:
-                                        await msg.delete()
-                                except (discord.NotFound, discord.Forbidden):
-                                    # メッセージが既に削除されているか、削除権限がない場合は無視
-                                    pass
+                        user = await self.bot.fetch_user(user_id)
+                        if user:
+                            channel = user.dm_channel or await user.create_dm()
+                            try:
+                                msg = await channel.fetch_message(int(message_id_str))
+                                if msg:
+                                    await msg.delete()
+                            except (discord.NotFound, discord.Forbidden):
+                                # メッセージが既に削除されている場合は無視
+                                pass
                     except Exception as e:
-                        print(f"[WARNING] メッセージ削除に失敗しましたが、データベースからは削除しました: {e}")
+                        print(f"[INFO] DMメッセージの削除に失敗しましたが、データベースからは削除しました: {e}")
                     
                     return True, "メッセージを削除しました。"
                     
-                except sqlite3.Error as e:
-                    db.rollback()
-                    print(f"[ERROR] データベースエラー: {e}")
-                    return False, "データベースエラーが発生しました。しばらくしてから再度お試しください。"
-                    
                 except Exception as e:
-                    print(f"[ERROR] メッセージ削除エラー: {e}")
-                    return False, f"メッセージの削除中にエラーが発生しました: {str(e)}"
+                    db.rollback()
+                    print(f"[ERROR] データベーストランザクションエラー: {e}")
+                    return False, "データベースの更新中にエラーが発生しました。"
                 
             except sqlite3.OperationalError as e:
                 error_msg = f"[ERROR] データベース操作エラー: {e}"
@@ -358,6 +307,93 @@ class DeleteDM(commands.Cog):
             print(f"[ERROR] {error_msg}")
             traceback.print_exc()
             return False, error_msg
+
+    @commands.hybrid_command(
+        name="delete_private",
+        description="DMで非公開投稿を削除します"
+    )
+    async def delete_private(self, interaction: discord.Interaction, message_id: str):
+        """DMで非公開投稿を削除します"""
+        # DMでのみ実行可能
+        if not isinstance(interaction.channel, discord.DMChannel):
+            await interaction.response.send_message(
+                "このコマンドはDMでのみ利用可能です",
+                ephemeral=True
+            )
+            return
+        
+        db = None
+        try:
+            # メッセージIDを数値に変換
+            message_id_int = int(message_id)
+            
+            # データベース接続
+            db = self.get_db_connection()
+            cursor = db.cursor()
+            
+            # 外部キー制約を有効化
+            cursor.execute("PRAGMA foreign_keys = ON")
+            
+            # トランザクション開始
+            cursor.execute("BEGIN TRANSACTION")
+            
+            # メッセージ情報を取得（投稿者も確認）
+            cursor.execute('''
+                SELECT m.message_id, t.id as post_id, t.user_id
+                FROM messages m
+                JOIN thoughts t ON m.post_id = t.id
+                WHERE m.message_id = ? AND t.user_id = ?
+            ''', (str(message_id_int), interaction.user.id))
+            
+            message_info = cursor.fetchone()
+            
+            if not message_info:
+                await interaction.response.send_message(
+                    "メッセージが見つからないか、削除する権限がありません。",
+                    ephemeral=True
+                )
+                db.rollback()
+                return
+            
+            # データベースから削除（CASCADEにより関連するレコードも削除）
+            cursor.execute('DELETE FROM messages WHERE message_id = ?', (str(message_id_int),))
+            
+            # コミット
+            db.commit()
+            
+            # メッセージを削除（可能な場合）
+            try:
+                message = await interaction.channel.fetch_message(message_id_int)
+                if message:
+                    await message.delete()
+            except (discord.NotFound, discord.Forbidden):
+                # メッセージが既に削除されている場合は無視
+                print(f"[INFO] メッセージ {message_id_int} は既に削除されています")
+            
+            await interaction.response.send_message(
+                "メッセージを削除しました。",
+                ephemeral=True
+            )
+            
+        except ValueError:
+            if db:
+                db.rollback()
+            await interaction.response.send_message(
+                "無効なメッセージIDです。数値で指定してください。",
+                ephemeral=True
+            )
+        except Exception as e:
+            if db:
+                db.rollback()
+            error_msg = f"[ERROR] 削除コマンドエラー: {type(e).__name__}: {str(e)}"
+            print(error_msg)
+            traceback.print_exc()
+            
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    f"エラーが発生しました: {str(e)}",
+                    ephemeral=True
+                )
 
 async def setup(bot):
     await bot.add_cog(DeleteDM(bot))
