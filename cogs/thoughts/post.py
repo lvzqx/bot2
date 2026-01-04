@@ -246,10 +246,7 @@ class Post(commands.Cog):
                         embed.set_image(url=image_url)
                     
                     # データベースの変更を確定
-                    self.bot.db.commit()
-                    
-                    # 投稿IDを取得
-                    post_id = cursor.lastrowid
+                    conn.commit()
                     
                     # チャンネルまたはDMに投稿
                     try:
