@@ -1,6 +1,7 @@
 import asyncio
 import discord
 import os
+from discord import app_commands
 from discord.ext import commands
 import sqlite3
 import re
@@ -10,39 +11,42 @@ from typing import Tuple, Optional
 class DeleteDM(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.tree = bot.tree
         print("DeleteDM cog が読み込まれました")
+        
+        # コマンドを登録
+        @self.tree.command(name="dm_delete", description="DMで送信したメッセージを削除します")
+        @app_commands.describe(message_id="削除するメッセージのID")
+        async def dm_delete(interaction: discord.Interaction, message_id: str):
+            """DMで送信したメッセージを削除します"""
+            # DMでのみ実行可能
+            if not isinstance(interaction.channel, discord.DMChannel):
+                await interaction.response.send_message(
+                    "このコマンドはDMでのみ使用できます。",
+                    ephemeral=True
+                )
+                return
+            
+            try:
+                # メッセージIDを数値に変換
+                message_id_int = int(message_id)
+            except ValueError:
+                await interaction.response.send_message(
+                    "無効なメッセージIDです。",
+                    ephemeral=True
+                )
+                return
+            
+            # メッセージ削除を実行
+            success, message = await self.delete_message_by_id(
+                interaction,
+                message_id_int,
+                interaction.user.id
+            )
+            
+            # 結果をユーザーに通知
+            await interaction.response.send_message(message, ephemeral=True)
     
-    @app_commands.command(name="dm_delete", description="DMで送信したメッセージを削除します")
-    @app_commands.describe(message_id="削除するメッセージのID")
-    async def dm_delete(self, interaction: discord.Interaction, message_id: str):
-        """DMで送信したメッセージを削除します"""
-        # DMでのみ実行可能
-        if not isinstance(interaction.channel, discord.DMChannel):
-            await interaction.response.send_message(
-                "このコマンドはDMでのみ使用できます。",
-                ephemeral=True
-            )
-            return
-        
-        try:
-            # メッセージIDを数値に変換
-            message_id_int = int(message_id)
-        except ValueError:
-            await interaction.response.send_message(
-                "無効なメッセージIDです。",
-                ephemeral=True
-            )
-            return
-        
-        # メッセージ削除を実行
-        success, message = await self.delete_message_by_id(
-            interaction,
-            message_id_int,
-            interaction.user.id
-        )
-        
-        # 結果をユーザーに通知
-        await interaction.response.send_message(message, ephemeral=True)
     
     def get_db_connection(self):
         """データベース接続を取得する（シンプル版）"""
