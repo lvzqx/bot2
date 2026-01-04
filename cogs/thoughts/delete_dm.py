@@ -161,12 +161,30 @@ class DeleteDM(commands.Cog):
             # メッセージを検索（ユーザーIDも確認）
             print(f"[DEBUG] データベース検索: message_id={message_id}, user_id={user_id}")
             
-            # メッセージIDとユーザーIDで検索（型を考慮）
-            print(f"[DEBUG] データベース検索開始: message_id={message_id} (型: {type(message_id)}), user_id={user_id}")
             
             # DM専用の削除処理（チャンネルIDはチェックしない）
             print(f"[DEBUG] DM専用削除処理を開始: message_id={message_id}, user_id={user_id}")
             
+            # メッセージIDとユーザーIDで検索（型を気にせず検索）
+            print(f"[DEBUG] データベース検索: message_id={message_id} (型: {type(message_id)}), user_id={user_id}")
+            
+            # データベース内の全メッセージをデバッグ表示
+            cursor.execute('''
+                SELECT m.id as db_id, m.message_id, t.user_id, m.channel_id, t.content, t.id as post_id
+                FROM messages m
+                JOIN thoughts t ON m.post_id = t.id
+                WHERE t.user_id = ?
+                ORDER BY m.id DESC
+                LIMIT 10
+            ''', (user_id,))
+            db_messages = cursor.fetchall()
+            print(f"[DEBUG] ユーザー {user_id} のメッセージ件数: {len(db_messages)}")
+            for row in db_messages:
+                msg_id = row['message_id']
+                print(f"[DEBUG] メッセージ: db_id={row['db_id']}, msg_id='{msg_id}' (型: {type(msg_id)}), "
+                      f"post_id={row['post_id']}, user_id={row['user_id']}, "
+                      f"channel_id={row['channel_id']}, content='{row['content'][:30]}...'")
+
             # メッセージIDの型に関わらず検索（文字列と数値の両方で試す）
             cursor.execute('''
                 SELECT m.message_id, t.id as post_id, t.user_id, m.channel_id, t.content
@@ -174,7 +192,7 @@ class DeleteDM(commands.Cog):
                 JOIN thoughts t ON m.post_id = t.id
                 WHERE (m.message_id = ? OR m.message_id = ?) 
                 AND t.user_id = ?
-            ''', (str(message_id), int(message_id), user_id))
+            ''', (str(message_id).strip(), int(message_id) if str(message_id).strip().isdigit() else -1, user_id))
             
             # 検索結果を取得して表示（デバッグ用）
             message_info = cursor.fetchone()
