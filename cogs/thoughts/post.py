@@ -686,12 +686,20 @@ class Post(commands.Cog):
         """新しい投稿を作成します"""
         logger.info(f"post コマンドが呼び出されました。ユーザー: {interaction.user}")
         # モーダルを表示
-        modal = self.PostModal(bot=self.bot)
-        await interaction.response.send_modal(modal)
+        await interaction.response.send_modal(self.PostModal(self.bot))
 
 
 async def setup(bot):
     cog = Post(bot)
+    
+    # コマンドが既に登録されていないか確認
+    if not hasattr(bot.tree, 'get_command') or not bot.tree.get_command('post'):
+        @app_commands.command(name='post', description='メッセージを投稿します')
+        @app_commands.guild_only()
+        async def post_command(interaction: discord.Interaction):
+            await cog.post(interaction)
+        
+        bot.tree.add_command(post_command)
+    
     await bot.add_cog(cog)
-    logger.info(f"[Post] コグがロードされました。登録コマンド: post")
-    return True
+    return cog
