@@ -124,11 +124,35 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
 
     async def setup_hook(self):
         """起動時の初期化処理"""
+        # コマンドツリーをクリア
+        self.tree.clear_commands(guild=None)
+        logger.info('🔄 コマンドツリーをクリアしました')
+        
         # コグの読み込み
         loaded_extensions = []
         failed_extensions = []
         
-        for ext in self.initial_extensions:
+        # まずは post と delete を先に読み込む
+        priority_extensions = [
+            'cogs.thoughts.post',
+            'cogs.thoughts.delete'
+        ]
+        
+        # 残りの拡張機能
+        other_extensions = [ext for ext in self.initial_extensions if ext not in priority_extensions]
+        
+        # 優先して読み込む拡張機能をロード
+        for ext in priority_extensions:
+            try:
+                await self.load_extension(ext)
+                loaded_extensions.append(ext)
+                logger.info(f'✅ 優先拡張機能を読み込みました: {ext}')
+            except Exception as e:
+                failed_extensions.append((ext, str(e)))
+                logger.error(f'❌ 優先拡張機能の読み込みに失敗しました: {ext} - {e}', exc_info=True)
+        
+        # その他の拡張機能をロード
+        for ext in other_extensions:
             try:
                 await self.load_extension(ext)
                 loaded_extensions.append(ext)
@@ -153,32 +177,90 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
         # コマンドツリーの同期結果を確認
         if not synced:
             logger.error('❌ コマンドの同期に失敗しました。コマンドが表示されない可能性があります。')
+            
+            # 再試行
+            logger.info('🔄 コマンドの同期を再試行します...')
+            synced = await self._sync_commands()
+            if not synced:
+                logger.error('❌ コマンドの再同期に失敗しました。')
         
         # 登録されているコマンドをログに出力
-        registered_commands = [f'/{cmd.name}' for cmd in self.tree.get_commands()]
-        logger.info(f'登録されているコマンド ({len(registered_commands)}件):\n' + 
-                  '\n'.join(f'  • {cmd}' for cmd in registered_commands))
+        registered_commands = self.tree.get_commands()
+        logger.info(f'登録されているコマンド ({len(registered_commands)}件):')
+        
+        if registered_commands:
+            for cmd in registered_commands:
+                cmd_info = f'  • /{cmd.name}'
+                if hasattr(cmd, 'description'):
+                    cmd_info += f' - {cmd.description}'
+                logger.info(cmd_info)
+        else:
+            logger.warning('⚠️ 登録されているコマンドがありません')
     
     async def _sync_commands(self):
         """スラッシュコマンドを同期"""
         try:
+            # 現在のコマンドツリーをクリア
+            self.tree.clear_commands(guild=None)
+            logger.info('🔄 コマンドツリーをクリアしました')
+            
+            # コマンドを再登録
+            for cmd in self.tree.walk_commands():
+                if isinstance(cmd, (app_commands.Command, app_commands.Group)):
+                    self.tree.add_command(cmd)
+            
             # グローバルコマンドとして同期
             synced = await self.tree.sync()
+            
+            # 登録されたコマンドを取得
+            registered_commands = self.tree.get_commands()
+            
             logger.info(f'✅ グローバルコマンドを同期しました: {len(synced)} コマンド')
             
-            # 登録されたコマンドをログに出力
-            commands_list = [f"• /{cmd.name}" for cmd in self.tree.get_commands()]
-            logger.info("登録されているコマンド:\n" + "\n".join(commands_list))
+            # 登録されたコマンドの詳細をログに出力
+            if registered_commands:
+                commands_info = []
+                for cmd in registered_commands:
+                    cmd_info = f"• /{cmd.name}"
+                    if hasattr(cmd, 'description'):
+                        cmd_info += f" - {cmd.description}"
+                    commands_info.append(cmd_info)
+                
+                logger.info("登録されているコマンド (詳細):\n" + "\n".join(commands_info))
+            else:
+                logger.warning("⚠️ 登録されているコマンドがありません")
             
-            return synced
+            return bool(synced)
+            
         except Exception as e:
-            logger.error(f'❌ コマンドの同期に失敗しました: {e}', exc_info=True)
-            raise
+            logger.error(f'❌ コマンドの同期に失敗しました: {str(e)}', exc_info=True)
+            return False
 
     async def on_ready(self):
         """ボットの準備が完了したときに呼び出される"""
-        logger.info(f'Logged in as {self.user} (ID: {self.user.id})')
+        logger.info(f'✅ ログインしました: {self.user} (ID: {self.user.id})')
         logger.info('------')
+        
+        # 登録されているコマンドを確認
+        commands = self.tree.get_commands()
+        logger.info(f'登録されているコマンド数: {len(commands)}')
+        
+        for cmd in commands:
+            cmd_info = f'/{cmd.name}'
+            if hasattr(cmd, 'description'):
+                cmd_info += f' - {cmd.description}'
+            logger.info(f'  {cmd_info}')
+        
+        # コマンドが登録されていない場合は警告を表示
+        if not commands:
+            logger.warning('⚠️ 登録されているコマンドがありません。コマンドツリーの同期に問題がある可能性があります。')
+            
+            # コマンドツリーを再同期
+            try:
+                synced = await self.tree.sync()
+                logger.info(f'🔄 コマンドツリーを再同期しました: {len(synced)} コマンド')
+            except Exception as e:
+                logger.error(f'❌ コマンドツリーの再同期に失敗しました: {e}', exc_info=True)
     
     async def on_error(self, event_method: str, *args, **kwargs) -> None:
         """イベントハンドラでのエラーを処理"""

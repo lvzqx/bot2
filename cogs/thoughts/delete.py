@@ -361,10 +361,11 @@ class Delete(commands.Cog):
             else:
                 await interaction.followup.send(error_msg, ephemeral=True)
     
+    # コマンドをクラスメソッドとして定義
     @app_commands.command(name="delete", description="メッセージIDで投稿を削除します")
     @app_commands.describe(message_id="削除するメッセージのID")
     @app_commands.guild_only()
-    async def delete(self, interaction: discord.Interaction, message_id: str) -> None:
+    async def delete_command(self, interaction: discord.Interaction, message_id: str) -> None:
         """メッセージIDで投稿を削除します
         
         Args:
@@ -373,6 +374,25 @@ class Delete(commands.Cog):
         """
         logger.info(f"delete コマンドが呼び出されました。ユーザー: {interaction.user}, メッセージID: {message_id}")
         await self._process_delete(interaction, message_id)
+        
+    # コマンドを登録するためのメソッドを追加
+    async def register_commands(self):
+        """コマンドを登録します"""
+        try:
+            # コマンドをツリーに追加
+            self.bot.tree.add_command(
+                app_commands.Command(
+                    name="delete",
+                    description="メッセージIDで投稿を削除します",
+                    callback=self.delete_command,
+                    guild_only=True
+                )
+            )
+            logger.info("✅ delete コマンドを登録しました")
+            return True
+        except Exception as e:
+            logger.error(f"❌ delete コマンドの登録に失敗しました: {e}", exc_info=True)
+            return False
 
 async def setup(bot: commands.Bot) -> bool:
     """Cogをボットに追加
@@ -383,8 +403,15 @@ async def setup(bot: commands.Bot) -> bool:
     try:
         cog = Delete(bot)
         await bot.add_cog(cog)
-        logger.info(f"[Delete] コグがロードされました。登録コマンド: {[cmd.name for cmd in cog.get_app_commands()]}")
-        return True
+        
+        # コマンドを登録
+        success = await cog.register_commands()
+        if success:
+            logger.info("✅ Delete コグのセットアップが完了しました")
+        else:
+            logger.error("❌ Delete コグのコマンド登録に失敗しました")
+            
+        return success
     except Exception as e:
         logger.error(f"[Delete] コグのロードに失敗しました: {e}", exc_info=True)
         return False
