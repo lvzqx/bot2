@@ -29,6 +29,18 @@ class Post(commands.Cog):
         self.bot = bot
         self._init_db()
         logger.info("Post cog が初期化されました")
+        # コマンドを手動で登録
+        self.bot.tree.add_command(self.post)
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        """ボットの準備が完了したときに呼び出されます"""
+        logger.info(f'✅ {self.bot.user} としてログインしました')
+        try:
+            synced = await self.bot.tree.sync()
+            logger.info(f'✅ コマンドを同期しました: {", ".join([cmd.name for cmd in synced])}')
+        except Exception as e:
+            logger.error(f'❌ コマンドの同期中にエラーが発生しました: {e}')
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self._init_db()
