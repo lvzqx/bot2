@@ -29,6 +29,10 @@ class Post(commands.Cog):
         self.bot = bot
         self._init_db()
         logger.info("Post cog が初期化されました")
+    def __init__(self, bot: commands.Bot) -> None:
+        self.bot = bot
+        self._init_db()
+        logger.info("Post cog が初期化されました")
 
     def _init_db(self) -> None:
         """データベースを初期化します。"""
@@ -352,24 +356,5 @@ class Post(commands.Cog):
         await interaction.response.send_modal(self.PostModal(self.bot))
 
 async def setup(bot: commands.Bot) -> None:
-    print("Post cog をロードしています...")
-    cog = Post(bot)
-    
-    # 既存のコマンドを削除（重複を防ぐため）
-    if hasattr(bot.tree, 'get_command') and bot.tree.get_command('post'):
-        bot.tree.remove_command('post')
-    
-    # コマンドを追加
-    bot.tree.add_command(cog.post)
-    print("post コマンドを登録しました")
-    
-    await bot.add_cog(cog)
+    await bot.add_cog(Post(bot))
     logger.info("Post cog が読み込まれました")
-    
-    # コマンドツリーを同期
-    try:
-        synced = await bot.tree.sync()
-        print(f"同期したスラッシュコマンド: {', '.join([cmd.name for cmd in synced])}")
-    except Exception as e:
-        print(f"コマンドの同期中にエラーが発生しました: {e}")
-        raise  # エラーを再スローしてデバッグしやすくする
