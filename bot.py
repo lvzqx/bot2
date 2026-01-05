@@ -109,7 +109,7 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
             command_prefix=commands.when_mentioned_or('!'),
             intents=intents,
             application_id=os.getenv('APPLICATION_ID'),
-            activity=discord.Game(name="!help でヘルプを表示")
+            activity=discord.Game(name="/help でヘルプを表示")
         )
         DatabaseMixin.__init__(self)
     
@@ -243,72 +243,11 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
         """ボットの準備が完了したときに呼び出される"""
         logger.info(f'✅ ログインしました: {self.user} (ID: {self.user.id})')
         logger.info('------')
-        
-        # 登録されているコマンドを確認
-        commands = self.tree.get_commands()
-        logger.info(f'現在登録されているコマンド数: {len(commands)}')
-        
-        # 登録されているコマンドを表示
-        if commands:
-            logger.info('登録されているコマンド一覧:')
-            for cmd in commands:
-                cmd_info = f'  • /{cmd.name}'
-                if hasattr(cmd, 'description'):
-                    cmd_info += f' - {cmd.description}'
-                logger.info(cmd_info)
-        
-        # 必要なコマンドが登録されているか確認
-        required_commands = {'post', 'delete'}
-        registered_commands = {cmd.name for cmd in commands}
-        missing_commands = required_commands - registered_commands
-        
-        if missing_commands:
-            logger.warning(f'⚠️ 以下の必須コマンドが登録されていません: {missing_commands}')
-            logger.info('コマンドを再登録します...')
-            
-            # 不足しているコマンドがある場合は、該当する拡張機能を再読み込み
-            for cmd in missing_commands:
-                ext_name = f'cogs.thoughts.{cmd}'
-                try:
-                    # 既存の拡張機能をアンロード
-                    if ext_name in self.extensions:
-                        await self.unload_extension(ext_name)
-                        logger.info(f'✅ 拡張機能をアンロードしました: {ext_name}')
-                    
-                    # 拡張機能を再読み込み
-                    await self.load_extension(ext_name)
-                    logger.info(f'✅ 拡張機能を再読み込みしました: {ext_name}')
-                    
-                except Exception as e:
-                    logger.error(f'❌ 拡張機能の再読み込みに失敗しました: {ext_name} - {e}')
-            
-            # コマンドを再同期
-            try:
-                synced = await self.tree.sync()
-                logger.info(f'✅ コマンドを再同期しました: {len(synced)} 件')
-                
-                # 再同期後のコマンドを確認
-                commands = self.tree.get_commands()
-                logger.info(f'再同期後の登録コマンド数: {len(commands)}')
-                
-                if commands:
-                    logger.info('再登録後のコマンド一覧:')
-                    for cmd in commands:
-                        cmd_info = f'  • /{cmd.name}'
-                        if hasattr(cmd, 'description'):
-                            cmd_info += f' - {cmd.description}'
-                        logger.info(cmd_info)
-                
-            except Exception as e:
-                logger.error(f'❌ コマンドの再同期に失敗しました: {e}', exc_info=True)
-        else:
-            logger.info('✅ すべての必須コマンドが正しく登録されています')
 
-# ボットの起動
-def main():
-    # ボットのインスタンスを作成
-    bot = ThoughtBot()
-    
+        # 拡張機能の読み込み状態を確認
+        logger.info('読み込まれている拡張機能:')
+        for ext in self.extensions:
+            logger.info(f'  • {ext}')
     # トークンの確認
     TOKEN = os.getenv('DISCORD_TOKEN')
     if not TOKEN:
