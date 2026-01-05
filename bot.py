@@ -152,10 +152,18 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
             for ext, error in failed_extensions:
                 logger.warning(f'  • {ext}: {error}')
         
-        # コマンドを手動で登録
+        # 既存のコマンドを取得
+        existing_commands = {cmd.name for cmd in self.tree.get_commands()}
+        
+        # コマンドを手動で登録（重複を避ける）
         for command in self.tree.walk_commands():
-            if isinstance(command, app_commands.Command):
-                self.tree.add_command(command)
+            if isinstance(command, app_commands.Command) and command.name not in existing_commands:
+                try:
+                    self.tree.add_command(command)
+                    existing_commands.add(command.name)
+                    logger.info(f'✅ コマンドを登録しました: /{command.name}')
+                except Exception as e:
+                    logger.error(f'❌ コマンドの登録に失敗しました: /{command.name} - {e}')
         
         # コマンドツリーを同期
         try:
@@ -188,32 +196,32 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
         logger.info(f'✅ ログインしました: {self.user} (ID: {self.user.id})')
         logger.info('------')
         
-        # コマンドツリーをクリア
-        self.tree.clear_commands(guild=None)
-        logger.info('🔄 コマンドツリーをクリアしました')
+        # 登録されているコマンドを確認
+        commands = self.tree.get_commands()
+        logger.info(f'現在登録されているコマンド数: {len(commands)}')
         
-        # コマンドを再登録
-        for command in self.tree.walk_commands():
-            if isinstance(command, app_commands.Command):
-                self.tree.add_command(command)
+        # コマンドが登録されていない場合のみ再同期を試みる
+        if not commands:
+            logger.warning('⚠️ 登録されているコマンドがありません。再同期を試みます...')
+            try:
+                synced = await self.tree.sync()
+                logger.info(f'✅ コマンドを同期しました: {len(synced)} 件')
+                
+                # 再度コマンドを確認
+                commands = self.tree.get_commands()
+                logger.info(f'再同期後の登録コマンド数: {len(commands)}')
+                
+            except Exception as e:
+                logger.error(f'❌ コマンドの再同期に失敗しました: {e}', exc_info=True)
         
-        # コマンドを同期
-        try:
-            synced = await self.tree.sync()
-            logger.info(f'✅ コマンドを同期しました: {len(synced)} 件')
-            
-            # 登録されているコマンドを確認
-            commands = self.tree.get_commands()
-            logger.info(f'登録されているコマンド数: {len(commands)}')
-            
+        # 登録されているコマンドをログに出力
+        if commands:
+            logger.info('現在のコマンド一覧:')
             for cmd in commands:
-                cmd_info = f'/{cmd.name}'
+                cmd_info = f'  • /{cmd.name}'
                 if hasattr(cmd, 'description'):
                     cmd_info += f' - {cmd.description}'
-                logger.info(f'  {cmd_info}')
-                
-        except Exception as e:
-            logger.error(f'❌ コマンドの同期に失敗しました: {e}', exc_info=True)
+                logger.info(cmd_info)
             
             # 再試行
             try:
