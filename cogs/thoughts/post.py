@@ -680,8 +680,6 @@ class Post(commands.Cog):
                     ephemeral=True
                 )
 
-    @app_commands.command(name="post", description="新しい投稿を作成します")
-    @app_commands.guild_only()
     async def post(self, interaction: discord.Interaction) -> None:
         """新しい投稿を作成します"""
         logger.info(f"post コマンドが呼び出されました。ユーザー: {interaction.user}")
@@ -702,4 +700,5 @@ async def setup(bot):
         bot.tree.add_command(post_command)
     
     await bot.add_cog(cog)
+    logger.info("[Post] コグがロードされました。登録コマンド: post")
     return cog

@@ -362,9 +362,6 @@ class Delete(commands.Cog):
             else:
                 await interaction.followup.send(error_msg, ephemeral=True)
     
-    @app_commands.command(name="delete", description="メッセージIDで投稿を削除します")
-    @app_commands.describe(message_id="削除するメッセージのID")
-    @app_commands.guild_only()
     async def delete(self, interaction: discord.Interaction, message_id: str) -> None:
         """メッセージIDで投稿を削除します
         

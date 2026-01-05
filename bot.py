@@ -115,9 +115,8 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
     
     async def setup_hook(self):
         """起動時の初期化処理"""
-        # コマンドツリーをクリア
-        self.tree.clear_commands(guild=None)
-        logger.info('🔄 コマンドツリーをクリアしました')
+        # コマンドツリーのクリアは行わない（各Cogのsetupで登録するため）
+        logger.info('🔄 拡張機能の読み込みを開始します...')
         
         # コグの読み込み
         loaded_extensions = []
