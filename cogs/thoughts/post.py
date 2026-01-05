@@ -7,8 +7,9 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import discord
-from discord import app_commands, ui
 from discord.ext import commands
+import discord.app_commands
+from discord import ui
 
 # 設定をインポート
 import sys
@@ -34,9 +35,11 @@ class Post(commands.Cog):
     @app_commands.guild_only()
     async def post(self, interaction: discord.Interaction) -> None:
         """新しい投稿を作成します"""
+        print(f"post コマンドが呼び出されました: {interaction.user}")
+        print(f"利用可能なコマンド: {[cmd.name for cmd in self.bot.tree.get_commands()]}")
         logger.info(f"post コマンドが呼び出されました。ユーザー: {interaction.user}")
-        modal = self.PostModal()
-        await interaction.response.send_modal(modal)
+        # モーダルを表示
+        await interaction.response.send_modal(self.PostModal())
 
     def _init_db(self) -> None:
         """データベースを初期化します。"""
