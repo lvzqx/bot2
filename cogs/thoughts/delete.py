@@ -34,9 +34,6 @@ class Delete(commands.Cog):
         self.bot = bot
         self._init_db()
         logger.info("Delete cog が初期化されました")
-        
-        # コマンドを手動で登録
-        self.bot.tree.add_command(self.delete)
     
     def _init_db(self) -> None:
         """データベースの初期化"""

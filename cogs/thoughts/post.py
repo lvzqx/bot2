@@ -57,13 +57,6 @@ DEFAULT_CATEGORY = 'その他'
 DEFAULT_AVATAR = 'https://cdn.discordapp.com/embed/avatars/0.png'  # 仮のデフォルトアバター
 
 class Post(commands.Cog):
-    def __init__(self, bot: commands.Bot) -> None:
-        self.bot = bot
-        self._init_db()
-        logger.info("Post cog が初期化されました")
-        
-        # コマンドを手動で登録
-        self.bot.tree.add_command(self.post)
     """投稿機能を提供するCog。
     
     ユーザーがメッセージを投稿し、データベースに保存する機能を提供します。
@@ -653,13 +646,42 @@ class Post(commands.Cog):
                 )
 
     @app_commands.command(name="post", description="新しい投稿を作成します")
-    @app_commands.describe()
-    async def post(self, interaction: discord.Interaction):
-        """新しい投稿を作成します"""
-        # DMの場合は無効化
-        if isinstance(interaction.channel, discord.DMChannel):
+    @app_commands.describe(
+        content="投稿内容を入力してください",
+        category="カテゴリを入力してください（任意）",
+        is_anonymous="匿名で投稿するかどうか（デフォルト: 非表示）",
+        is_private="非公開で投稿するかどうか（デフォルト: 公開）"
+    )
+    @app_commands.guild_only()
+    async def post(
+        self,
+        interaction: discord.Interaction,
+        content: str,
+        category: Optional[str] = None,
+        is_anonymous: bool = False,
+        is_private: bool = False
+    ):
+        """新しい投稿を作成します
+        
+        Args:
+            interaction: インタラクションオブジェクト
+            content: 投稿内容
+            category: カテゴリ（任意）
+            is_anonymous: 匿名で投稿するかどうか
+            is_private: 非公開で投稿するかどうか
+        """
+        # コンテンツの長さを検証
+        if len(content) > MAX_CONTENT_LENGTH:
             await interaction.response.send_message(
-                "❌ このコマンドはDMでは使用できません。サーバー内でお試しください。",
+                f"❌ 投稿内容は{MAX_CONTENT_LENGTH}文字以内にしてください。",
+                ephemeral=True
+            )
+            return
+            
+        # カテゴリの長さを検証
+        if category and len(category) > MAX_CATEGORY_LENGTH:
+            await interaction.response.send_message(
+                f"❌ カテゴリは{MAX_CATEGORY_LENGTH}文字以内にしてください。",
                 ephemeral=True
             )
             return
