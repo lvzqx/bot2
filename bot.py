@@ -248,6 +248,24 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
         logger.info('読み込まれている拡張機能:')
         for ext in self.extensions:
             logger.info(f'  • {ext}')
+            
+        # 登録されているコマンドを確認
+        commands = self.tree.get_commands()
+        logger.info(f'現在登録されているコマンド数: {len(commands)}')
+        
+        # 登録されているコマンドを表示
+        if commands:
+            logger.info('登録されているコマンド一覧:')
+            for cmd in commands:
+                cmd_info = f'  • /{cmd.name}'
+                if hasattr(cmd, 'description'):
+                    cmd_info += f' - {cmd.description}'
+                logger.info(cmd_info)
+
+def main():
+    # ボットのインスタンスを作成
+    bot = ThoughtBot()
+    
     # トークンの確認
     TOKEN = os.getenv('DISCORD_TOKEN')
     if not TOKEN:
