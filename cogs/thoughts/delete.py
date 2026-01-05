@@ -329,20 +329,12 @@ class Delete(commands.Cog):
                 )
                 return
             
-            # DMの場合はdelete_dmに処理を委譲
+            # DMの場合はエラーを返す
             if isinstance(interaction.channel, discord.DMChannel):
-                from .delete_dm import DeleteDM
-                delete_dm_cog = DeleteDM(self.bot)
-                success, result = await delete_dm_cog.delete_message_by_id(
-                    interaction=interaction,
-                    message_id=message_id_int,
-                    user_id=interaction.user.id
+                await interaction.response.send_message(
+                    "❌ このコマンドはDMでは使用できません。サーバー内でお試しください。",
+                    ephemeral=True
                 )
-                
-                if success:
-                    await interaction.response.send_message(result, ephemeral=True)
-                else:
-                    await interaction.response.send_message(result, ephemeral=True)
                 return
                 
             # サーバー内の処理
@@ -362,7 +354,7 @@ class Delete(commands.Cog):
     @app_commands.command(name="delete", description="メッセージIDで投稿を削除します")
     @app_commands.describe(message_id="削除するメッセージのID")
     async def delete(self, interaction: discord.Interaction, message_id: str):
-        """メッセージIDで投稿を削除します（DMでも使用可能）"""
+        """メッセージIDで投稿を削除します"""
         await self._process_delete(interaction, message_id)
 
 async def setup(bot):

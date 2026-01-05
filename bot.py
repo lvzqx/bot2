@@ -26,7 +26,6 @@ class ThoughtBot(commands.Bot):
             'cogs.thoughts.list',
             'cogs.thoughts.search',
             'cogs.thoughts.delete',
-            'cogs.thoughts.delete_dm',  # DM用の削除コマンド
             'cogs.thoughts.edit',
             'cogs.thoughts.cleanup',
             'cogs.thoughts.auto_delete',
@@ -190,11 +189,16 @@ async def on_command_error(ctx, error):
 @bot.command()
 @commands.is_owner()
 async def sync(ctx):
+    """スラッシュコマンドを同期します（Botオーナーのみ）"""
     try:
-        await bot.tree.sync()
-        await ctx.send("✅ コマンドを同期しました")
+        synced = await bot.tree.sync()
+        await ctx.send(f"✅ {len(synced)}個のコマンドを同期しました。")
+        
+        # 登録されているコマンドを表示
+        commands_list = [f"• /{cmd.name}" for cmd in bot.tree.get_commands()]
+        await ctx.send(f"登録されているコマンド:\n" + "\n".join(commands_list))
     except Exception as e:
-        await ctx.send(f"❌ エラー: {e}")
+        await ctx.send(f"❌ 同期中にエラーが発生しました: {e}")
 
 # ヘルプコマンド（スラッシュコマンドのみ）
 @bot.tree.command(name="help", description="利用可能なコマンドを表示します")
