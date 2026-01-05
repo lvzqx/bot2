@@ -37,23 +37,35 @@ class ThoughtBot(commands.Bot):
         self.db = sqlite3.connect('thoughts.db')
         self.init_db()
         
+        # コグの読み込み前にコマンドツリーをリセット
+        self.tree.clear_commands(guild=None)
+        print("🔄 コマンドツリーをリセットしました")
+        
         # コグの読み込み
         for ext in self.initial_extensions:
             try:
                 await self.load_extension(ext)
                 print(f'✅ Loaded extension: {ext}')
+                
+                # コグからコマンドを取得して表示
+                cog = self.get_cog(ext.split('.')[-1].title())
+                if cog:
+                    print(f"  Commands in {ext}:")
+                    for cmd in cog.get_app_commands():
+                        print(f"    - /{cmd.name}")
+                        
             except Exception as e:
                 print(f'❌ Failed to load extension {ext}: {e}')
         
-        # コマンドツリーの同期（グローバル）
-        synced = await self.tree.sync()
-        print(f'✅ コマンドツリーを同期しました: {len(synced)} コマンド')
-        
-        # 登録されているコマンドを表示
-        commands_list = [f"• /{cmd.name}" for cmd in self.tree.get_commands()]
-        print("登録されているコマンド:")
-        for cmd in commands_list:
-            print(f"  {cmd}")
+        # グローバルコマンドとして同期
+        try:
+            synced = await self.tree.sync()
+            print(f'✅ グローバルコマンドを同期しました: {len(synced)} コマンド')
+            print("登録されているグローバルコマンド:")
+            for cmd in self.tree.get_commands():
+                print(f"  • /{cmd.name} (guild: {cmd.guild_ids if hasattr(cmd, 'guild_ids') else 'global'})")
+        except Exception as e:
+            print(f'❌ コマンドの同期に失敗しました: {e}')
 
     def init_db(self):
         cursor = self.db.cursor()

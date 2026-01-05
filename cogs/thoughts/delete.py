@@ -34,6 +34,9 @@ class Delete(commands.Cog):
         self.bot = bot
         self._init_db()
         logger.info("Delete cog が初期化されました")
+        
+        # コマンドを手動で登録
+        self.bot.tree.add_command(self.delete)
     
     def _init_db(self) -> None:
         """データベースの初期化"""
@@ -353,6 +356,7 @@ class Delete(commands.Cog):
     
     @app_commands.command(name="delete", description="メッセージIDで投稿を削除します")
     @app_commands.describe(message_id="削除するメッセージのID")
+    @app_commands.guild_only()
     async def delete(self, interaction: discord.Interaction, message_id: str):
         """メッセージIDで投稿を削除します"""
         await self._process_delete(interaction, message_id)
