@@ -680,6 +680,8 @@ class Post(commands.Cog):
                     ephemeral=True
                 )
 
+    @app_commands.command(name="post", description="新しい投稿を作成します")
+    @app_commands.guild_only()
     async def post(self, interaction: discord.Interaction) -> None:
         """新しい投稿を作成します"""
         logger.info(f"post コマンドが呼び出されました。ユーザー: {interaction.user}")
@@ -687,18 +689,5 @@ class Post(commands.Cog):
         await interaction.response.send_modal(self.PostModal(self.bot))
 
 
-async def setup(bot):
-    cog = Post(bot)
-    
-    # コマンドが既に登録されていないか確認
-    if not hasattr(bot.tree, 'get_command') or not bot.tree.get_command('post'):
-        @app_commands.command(name='post', description='メッセージを投稿します')
-        @app_commands.guild_only()
-        async def post_command(interaction: discord.Interaction):
-            await cog.post(interaction)
-        
-        bot.tree.add_command(post_command)
-    
-    await bot.add_cog(cog)
-    logger.info("[Post] コグがロードされました。登録コマンド: post")
-    return cog
+def setup(bot):
+    return bot.add_cog(Post(bot))

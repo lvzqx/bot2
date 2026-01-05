@@ -362,6 +362,9 @@ class Delete(commands.Cog):
             else:
                 await interaction.followup.send(error_msg, ephemeral=True)
     
+    @app_commands.command(name="delete", description="メッセージIDで投稿を削除します")
+    @app_commands.describe(message_id="削除するメッセージのID")
+    @app_commands.guild_only()
     async def delete(self, interaction: discord.Interaction, message_id: str) -> None:
         """メッセージIDで投稿を削除します
         
@@ -372,19 +375,6 @@ class Delete(commands.Cog):
         logger.info(f"delete コマンドが呼び出されました。ユーザー: {interaction.user}, メッセージID: {message_id}")
         await self._process_delete(interaction, message_id)
 
-async def setup(bot):
-    cog = Delete(bot)
-    
-    # コマンドが既に登録されていないか確認
-    if not hasattr(bot.tree, 'get_command') or not bot.tree.get_command('delete'):
-        @app_commands.command(name='delete', description='投稿を削除します')
-        @app_commands.describe(message_id='削除するメッセージのID')
-        @app_commands.guild_only()
-        async def delete_command(interaction: discord.Interaction, message_id: str):
-            await cog.delete(interaction, message_id)
-        
-        bot.tree.add_command(delete_command)
-    
-    await bot.add_cog(cog)
-    logger.info("[Delete] コグがロードされました。登録コマンド: delete")
-    return cog
+
+def setup(bot):
+    return bot.add_cog(Delete(bot))
