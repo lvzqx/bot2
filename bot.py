@@ -125,15 +125,39 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
     async def setup_hook(self):
         """起動時の初期化処理"""
         # コグの読み込み
+        loaded_extensions = []
+        failed_extensions = []
+        
         for ext in self.initial_extensions:
             try:
                 await self.load_extension(ext)
-                logger.info(f'✅ Loaded extension: {ext}')
+                loaded_extensions.append(ext)
+                logger.info(f'✅ 拡張機能を読み込みました: {ext}')
             except Exception as e:
-                logger.error(f'❌ Failed to load extension {ext}: {e}', exc_info=True)
+                failed_extensions.append((ext, str(e)))
+                logger.error(f'❌ 拡張機能の読み込みに失敗しました: {ext} - {e}', exc_info=True)
+        
+        # 読み込み結果をログに出力
+        if loaded_extensions:
+            logger.info(f'✅ 読み込みに成功した拡張機能 ({len(loaded_extensions)}/{len(self.initial_extensions)}):\n' + 
+                      '\n'.join(f'  • {ext}' for ext in loaded_extensions))
+        
+        if failed_extensions:
+            logger.warning('❌ 読み込みに失敗した拡張機能:')
+            for ext, error in failed_extensions:
+                logger.warning(f'  • {ext}: {error}')
         
         # コマンドツリーを同期
-        await self._sync_commands()
+        synced = await self._sync_commands()
+        
+        # コマンドツリーの同期結果を確認
+        if not synced:
+            logger.error('❌ コマンドの同期に失敗しました。コマンドが表示されない可能性があります。')
+        
+        # 登録されているコマンドをログに出力
+        registered_commands = [f'/{cmd.name}' for cmd in self.tree.get_commands()]
+        logger.info(f'登録されているコマンド ({len(registered_commands)}件):\n' + 
+                  '\n'.join(f'  • {cmd}' for cmd in registered_commands))
     
     async def _sync_commands(self):
         """スラッシュコマンドを同期"""

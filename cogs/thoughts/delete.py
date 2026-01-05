@@ -371,10 +371,20 @@ class Delete(commands.Cog):
             interaction: Discordインタラクション
             message_id: 削除するメッセージのID
         """
+        logger.info(f"delete コマンドが呼び出されました。ユーザー: {interaction.user}, メッセージID: {message_id}")
         await self._process_delete(interaction, message_id)
 
-async def setup(bot: commands.Bot) -> None:
-    """Cogをボットに追加"""
-    cog = Delete(bot)
-    await bot.add_cog(cog)
-    logger.info(f"[Delete] Registered commands: {[cmd.name for cmd in cog.get_app_commands()]}")
+async def setup(bot: commands.Bot) -> bool:
+    """Cogをボットに追加
+    
+    Returns:
+        bool: ロードが成功したかどうか
+    """
+    try:
+        cog = Delete(bot)
+        await bot.add_cog(cog)
+        logger.info(f"[Delete] コグがロードされました。登録コマンド: {[cmd.name for cmd in cog.get_app_commands()]}")
+        return True
+    except Exception as e:
+        logger.error(f"[Delete] コグのロードに失敗しました: {e}", exc_info=True)
+        return False
