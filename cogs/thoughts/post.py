@@ -41,6 +41,12 @@ MAX_CONTENT_LENGTH = 2000
 MAX_CATEGORY_LENGTH = 50
 DEFAULT_CATEGORY = 'その他'
 
+# チャンネル設定
+CHANNELS = {
+    'public': 1457611087561101332,  # 公開用チャンネルIDに置き換えてください
+    'private': 1457611128225009666  # 非公開用チャンネルIDに置き換えてください
+}
+
 class Post(commands.Cog):
     """投稿機能を提供するCog。
     
@@ -361,16 +367,9 @@ class Post(commands.Cog):
                 try:
                     content, category, image_url, is_anonymous, is_private = \
                         await self._validate_inputs()
-                except ValueError as e:
-                    await interaction.followup.send(
-                        f"❌ {str(e)}",
-                        ephemeral=True
-                    )
-                    return
-                
-                # 投稿をデータベースに保存
-                try:
-                    post_id = await self._save_post_to_db(
+                    
+                    # 投稿をデータベースに保存
+                    post_id = await self.bot.get_cog('Post')._save_post_to_db(
                         user=interaction.user,
                         content=content,
                         category=category,
@@ -378,57 +377,85 @@ class Post(commands.Cog):
                         is_anonymous=is_anonymous,
                         is_private=is_private
                     )
-                except sqlite3.Error as e:
-                    logger.error(f"データベースの保存中にエラーが発生しました: {e}", exc_info=True)
+                except ValueError as e:
                     await interaction.followup.send(
-                        "❌ 投稿の保存中にエラーが発生しました。しばらくしてからもう一度お試しください。",
+                        f"❌ {str(e)}",
                         ephemeral=True
                     )
                     return
                 
-                # 成功メッセージを送信
+                # 投稿用の埋め込みメッセージを作成
+                embed = self._create_post_embed(
+                    content=content,
+                    category=category,
+                    image_url=image_url,
+                    is_anonymous=is_anonymous,
+                    post_id=post_id,
+                    user=interaction.user
+                )
+                
+                # 投稿を適切なチャンネルに送信
                 try:
-                    # 投稿内容のプレビューを作成
-                    embed = self._create_post_embed(
-                        content=content,
-                        category=category,
-                        image_url=image_url,
-                        is_anonymous=is_anonymous,
-                        post_id=post_id,
-                        user=interaction.user
-                    )
+                    # チャンネルを取得
+                    target_channel_id = CHANNELS['private' if is_private else 'public']
+                    target_channel = interaction.guild.get_channel(target_channel_id)
                     
-                    # メッセージを送信
-                    await interaction.followup.send(
-                        "✅ 投稿が完了しました！",
-                        embed=embed,
-                        ephemeral=True
-                    )
+                    if not target_channel:
+                        raise ValueError(f"{'非公開' if is_private else '公開'}用のチャンネルが見つかりません")
                     
-                    logger.info(f"投稿が完了しました: post_id={post_id}, user_id={interaction.user.id}")
-                    
-                except Exception as e:
-                    logger.error(f"メッセージ送信中にエラーが発生しました: {e}", exc_info=True)
-                    await interaction.followup.send(
-                        "✅ 投稿は保存されましたが、メッセージの送信中にエラーが発生しました。",
-                        ephemeral=True
-                    )
-            
-            except Exception as e:
-                logger.critical("予期せぬエラーが発生しました", exc_info=True)
-                try:
-                    if not interaction.response.is_done():
-                        await interaction.response.send_message(
-                            "⚠️ 予期せぬエラーが発生しました。しばらくしてからもう一度お試しください。",
+                    # チャンネルに投稿
+                    if is_private:
+                        # 非公開の場合は通常のメッセージとして送信
+                        message = await target_channel.send(embed=embed)
+                        
+                        # ユーザーに確認メッセージを送信
+                        await interaction.followup.send(
+                            "✅ 非公開で投稿しました。このメッセージはあなたにのみ表示されています。",
                             ephemeral=True
                         )
                     else:
-                        await interaction.followup.send(
-                            "⚠️ 予期せぬエラーが発生しました。しばらくしてからもう一度お試しください。",
-                            ephemeral=True
+                        # 公開の場合はメッセージを送信し、データベースに保存
+                        message = await target_channel.send(embed=embed)
+                        
+                        # メッセージ参照をデータベースに保存
+                        with self.bot.get_cog('Post')._get_db_connection() as conn:
+                            with self.bot.get_cog('Post')._get_cursor(conn) as cursor:
+                                cursor.execute(
+                                    """
+                                    INSERT INTO message_references (post_id, message_id, channel_id)
+                                    VALUES (?, ?, ?)
+                                    """,
+                                    (post_id, str(message.id), str(target_channel.id))
+                                )
+                                conn.commit()
+                        
+                        # ユーザーに確認メッセージを送信
+                        confirm_embed = discord.Embed(
+                            title='✅ 投稿が完了しました',
+                            description='公開チャンネルに投稿されました。',
+                            color=discord.Color.green()
                         )
+                        confirm_embed.add_field(name='投稿ID', value=str(post_id), inline=True)
+                        confirm_embed.add_field(name='カテゴリー', value=category, inline=True)
+                        confirm_embed.add_field(name='表示名', value='匿名' if is_anonymous else '表示', inline=True)
+                        confirm_embed.add_field(name='公開設定', value='公開 🌐', inline=True)
+                        confirm_embed.add_field(name='投稿先チャンネル', value=target_channel.mention, inline=False)
+                        
+                        await interaction.followup.send(embed=confirm_embed, ephemeral=True)
+                        
                 except Exception as e:
-                    logger.error("エラーメッセージの送信中にエラーが発生しました", exc_info=True)
+                    logger.error("チャンネルへの投稿中にエラーが発生しました", exc_info=True)
+                    await interaction.followup.send(
+                        "⚠️ 投稿中にエラーが発生しました。しばらくしてからもう一度お試しください。",
+                        ephemeral=True
+                    )
+                    
+            except Exception as e:
+                logger.error(f"投稿処理中にエラーが発生しました: {e}", exc_info=True)
+                await interaction.followup.send(
+                    "⚠️ 投稿処理中にエラーが発生しました。しばらくしてからもう一度お試しください。",
+                    ephemeral=True
+                )
     
     def _create_post_embed(
         self,
@@ -593,9 +620,22 @@ class Post(commands.Cog):
                             raise ValueError(f"{'非公開' if is_private else '公開'}用のチャンネルが見つかりません")
                         
                         # チャンネルに投稿
-                        await target_channel.send(embed=embed)
+                        message = await target_channel.send(embed=embed)
                         
-                        # ユーザーに確認メッセージを送信
+                        # メッセージ参照をデータベースに保存（非公開の場合は保存しない）
+                        if not is_private:
+                            with self.bot.get_cog('Post')._get_db_connection() as conn:
+                                with self.bot.get_cog('Post')._get_cursor(conn) as cursor:
+                                    cursor.execute(
+                                        """
+                                        INSERT INTO message_references (post_id, message_id, channel_id)
+                                        VALUES (?, ?, ?)
+                                        """,
+                                        (post_id, str(message.id), str(target_channel.id))
+                                    )
+                                    conn.commit()
+                        
+                        # ユーザーに確認メッセージを送信（非公開の場合はエフェメラルメッセージとして送信）
                         confirm_embed = discord.Embed(
                             title='✅ 投稿が完了しました',
                             description=f"{'非公開' if is_private else '公開'}チャンネルに投稿されました。",
@@ -605,9 +645,18 @@ class Post(commands.Cog):
                         confirm_embed.add_field(name='カテゴリー', value=category, inline=True)
                         confirm_embed.add_field(name='表示名', value='匿名' if is_anonymous else '表示', inline=True)
                         confirm_embed.add_field(name='公開設定', value='非公開 🔒' if is_private else '公開 🌐', inline=True)
-                        confirm_embed.add_field(name='投稿先チャンネル', value=target_channel.mention, inline=False)
                         
-                        await interaction.response.send_message(embed=confirm_embed, ephemeral=True)
+                        if not is_private:
+                            confirm_embed.add_field(name='投稿先チャンネル', value=target_channel.mention, inline=False)
+                        
+                        # 非公開の場合はエフェメラルメッセージとして送信
+                        if is_private:
+                            await interaction.response.send_message(
+                                "✅ 非公開で投稿しました。このメッセージはあなたにのみ表示されています。",
+                                ephemeral=True
+                            )
+                        else:
+                            await interaction.response.send_message(embed=confirm_embed, ephemeral=True)
                         
                     except Exception as e:
                         logger.error(f"チャンネルへの投稿中にエラーが発生しました: {e}", exc_info=True)
