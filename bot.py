@@ -1,10 +1,12 @@
-import os
 from __future__ import annotations
+
 import asyncio
+import contextlib
 import logging
 import os
+import sqlite3
 import sys
-from typing import Optional
+from typing import Optional, List, Dict, Any, Union
 
 import discord
 from discord.ext import commands
@@ -72,7 +74,7 @@ class DatabaseMixin:
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_thoughts_created_at ON thoughts (created_at)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_thoughts_category ON thoughts (category)')
             
-            # パフォーマンス設定
+            # パフォーマンス最適化
             cursor.execute('PRAGMA journal_mode=WAL')
             cursor.execute('PRAGMA synchronous=NORMAL')
             cursor.execute('PRAGMA cache_size=-2000')
@@ -81,22 +83,23 @@ class DatabaseMixin:
     
     @contextlib.contextmanager
     def _get_db_connection(self):
-        """データベース接続を取得するコンテキストマネージャー"""
-        conn = sqlite3.connect(self.db_path)
+        """データベース接続を取得するコンテキストマネージャ"""
+        conn = sqlite3.connect(
+            self.db_path,
+            isolation_level=None,
+            timeout=30.0,
+            detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
+        )
         conn.row_factory = sqlite3.Row
+        
         try:
             yield conn
+        except sqlite3.Error as e:
+            logger.error(f"データベースエラー: {e}")
+            conn.rollback()
+            raise
         finally:
             conn.close()
-    
-    @contextlib.contextmanager
-    def _get_cursor(self, conn):
-        """カーソルを取得するコンテキストマネージャー"""
-        cursor = conn.cursor()
-        try:
-            yield cursor
-        finally:
-            cursor.close()
 
 class ThoughtBot(commands.Bot, DatabaseMixin):
     """メインボットクラス"""
@@ -105,24 +108,11 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
         super().__init__(
             command_prefix=commands.when_mentioned_or('!'),
             intents=intents,
-            activity=discord.Game(name="/help")
+            application_id=os.getenv('APPLICATION_ID'),
+            activity=discord.Game(name="!help でヘルプを表示")
         )
-        
-        # 拡張機能のリスト
-        self.initial_extensions = [
-            'cogs.thoughts.post',
-            'cogs.thoughts.list',
-            'cogs.thoughts.search',
-            'cogs.thoughts.delete',
-            'cogs.thoughts.edit',
-            'cogs.thoughts.cleanup',
-            'cogs.thoughts.auto_delete',
-            'cogs.thoughts.help',
-        ]
-        
-        # データベースの初期化
         DatabaseMixin.__init__(self)
-
+    
     async def setup_hook(self):
         """起動時の初期化処理"""
         # コマンドツリーをクリア
@@ -211,7 +201,7 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
                         if ext_name in self.extensions:
                             await self.unload_extension(ext_name)
                             logger.info(f'✅ 拡張機能をアンロードしました: {ext_name}')
-                        
+                            
                         # 拡張機能を再読み込み
                         await self.load_extension(ext_name)
                         logger.info(f'✅ 拡張機能を再読み込みしました: {ext_name}')
@@ -249,7 +239,6 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
             except Exception as e:
                 logger.error(f'❌ コマンドツリーの再同期に失敗しました: {e}', exc_info=True)
     
-
     async def on_ready(self):
         """ボットの準備が完了したときに呼び出される"""
         logger.info(f'✅ ログインしました: {self.user} (ID: {self.user.id})')
@@ -314,123 +303,27 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
                 logger.error(f'❌ コマンドの再同期に失敗しました: {e}', exc_info=True)
         else:
             logger.info('✅ すべての必須コマンドが正しく登録されています')
-        
-        # 登録されているコマンドをログに出力
-        if commands:
-            logger.info('現在のコマンド一覧:')
-            for cmd in commands:
-                cmd_info = f'  • /{cmd.name}'
-                if hasattr(cmd, 'description'):
-                    cmd_info += f' - {cmd.description}'
-                logger.info(cmd_info)
-            
-            # 再試行
-            try:
-                synced = await self.tree.sync()
-                logger.info(f'🔄 コマンドツリーを再同期しました: {len(synced)} コマンド')
-            except Exception as e:
-                logger.error(f'❌ コマンドツリーの再同期に失敗しました: {e}', exc_info=True)
-    
-    async def on_error(self, event_method: str, *args, **kwargs) -> None:
-        """イベントハンドラでのエラーを処理"""
-        logger.error(f'Error in {event_method}', exc_info=True)
 
-    async def close(self):
-        """ボットの終了処理"""
-        await super().close()
-
-def with_transaction(func):
-    """データベーストランザクション用デコレータ"""
-    async def wrapper(*args, **kwargs):
-        self = args[0] if args else None
-        if not hasattr(self, '_get_db_connection'):
-            return await func(*args, **kwargs)
-            
-        with self._get_db_connection() as conn:
-            try:
-                result = await func(*args, **kwargs, conn=conn)
-                conn.commit()
-                return result
-            except Exception as e:
-                conn.rollback()
-                logger.error(f'Transaction failed: {e}', exc_info=True)
-                raise
-    return wrapper
-
-async def main():
-    """メイン関数"""
+# ボットの起動
+def main():
     # ボットのインスタンスを作成
     bot = ThoughtBot()
     
-    # エラーハンドラを設定
-    @bot.event
-    async def on_command_error(ctx, error):
-        if isinstance(error, commands.CommandNotFound):
-            return
-            
-        error_msg = None
-        if isinstance(error, commands.MissingRequiredArgument):
-            error_msg = '必要な引数が不足しています。コマンドを確認してください。'
-        elif isinstance(error, commands.MissingPermissions):
-            error_msg = 'このコマンドを実行する権限がありません。'
-        else:
-            error_msg = 'エラーが発生しました。後でもう一度お試しください。'
-            logger.error(f'Command error: {error}', exc_info=True)
-        
-        if error_msg and not ctx.interaction.response.is_done():
-            await ctx.send(error_msg, ephemeral=True)
+    # トークンの確認
+    TOKEN = os.getenv('DISCORD_TOKEN')
+    if not TOKEN:
+        logger.error('❌ 環境変数 DISCORD_TOKEN が設定されていません')
+        sys.exit(1)
     
-    # 同期用コマンド
-    @bot.command(name='sync')
-    @commands.is_owner()
-    async def sync_commands(ctx):
-        """スラッシュコマンドを再同期します（Botオーナーのみ）"""
-        try:
-            # すべての拡張機能をリロード
-            for ext in bot.initial_extensions:
-                try:
-                    await bot.reload_extension(ext)
-                    logger.info(f'Reloaded extension: {ext}')
-                except Exception as e:
-                    logger.error(f'Failed to reload {ext}: {e}', exc_info=True)
-            
-            # コマンドを同期
-            synced = await bot._sync_commands()
-            
-            if synced:
-                commands_list = [f"• /{cmd.name}" for cmd in bot.tree.get_commands()]
-                await ctx.send(
-                    f'✅ {len(synced)}個のコマンドを同期しました。\n' +
-                    '登録されているコマンド:\n' + 
-                    '\n'.join(commands_list)
-                )
-        except Exception as e:
-            await ctx.send(f'❌ 同期中にエラーが発生しました: {e}')
-    
-    # ヘルプコマンドは help.py に移動しました
-
     # ボットを起動
     try:
-        token = os.getenv('DISCORD_TOKEN')
-        if not token:
-            raise ValueError('DISCORD_TOKEN が設定されていません。.envファイルを確認してください。')
-            
-        logger.info('Starting bot...')
-        await bot.start(token)
-    except KeyboardInterrupt:
-        logger.info('Bot is shutting down...')
+        bot.run(TOKEN)
+    except discord.LoginFailure:
+        logger.error('❌ ログインに失敗しました。トークンが無効です。')
+        sys.exit(1)
     except Exception as e:
-        logger.error(f'Bot crashed: {e}', exc_info=True)
-    finally:
-        if not bot.is_closed():
-            await bot.close()
+        logger.error(f'❌ ボットの起動中にエラーが発生しました: {e}')
+        sys.exit(1)
 
 if __name__ == '__main__':
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logger.info('Bot has been stopped by user')
-    except Exception as e:
-        logger.critical(f'Fatal error: {e}', exc_info=True)
-    finally:
-        logger.info('Bot has been stopped')
+    main()
