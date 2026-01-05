@@ -354,9 +354,17 @@ class Post(commands.Cog):
 async def setup(bot: commands.Bot) -> None:
     print("Post cog をロードしています...")
     cog = Post(bot)
+    
+    # 既存のコマンドを削除（重複を防ぐため）
+    if hasattr(bot.tree, 'get_command') and bot.tree.get_command('post'):
+        bot.tree.remove_command('post')
+    
+    # コマンドを追加
+    bot.tree.add_command(cog.post)
+    print("post コマンドを登録しました")
+    
     await bot.add_cog(cog)
     logger.info("Post cog が読み込まれました")
-    print(f"登録されたコマンド: {[cmd.name for cmd in bot.tree.get_commands()]}")
     
     # コマンドツリーを同期
     try:
@@ -364,3 +372,4 @@ async def setup(bot: commands.Bot) -> None:
         print(f"同期したスラッシュコマンド: {', '.join([cmd.name for cmd in synced])}")
     except Exception as e:
         print(f"コマンドの同期中にエラーが発生しました: {e}")
+        raise  # エラーを再スローしてデバッグしやすくする
