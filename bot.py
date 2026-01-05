@@ -1,8 +1,9 @@
 import os
-import logging
-import sqlite3
+from __future__ import annotations
 import asyncio
-import contextlib
+import logging
+import os
+import sys
 from typing import Optional
 
 import discord
@@ -132,19 +133,38 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
         loaded_extensions = []
         failed_extensions = []
         
+        # 必要な拡張機能の順序を定義（依存関係がある場合に備えて）
+        required_extensions = [
+            'cogs.thoughts.post',
+            'cogs.thoughts.delete',
+            'cogs.thoughts.list',
+            'cogs.thoughts.search',
+            'cogs.thoughts.edit',
+            'cogs.thoughts.cleanup',
+            'cogs.thoughts.auto_delete',
+            'cogs.thoughts.help',
+        ]
+        
         # 拡張機能をロード
-        for ext in self.initial_extensions:
+        for ext in required_extensions:
             try:
+                # 既に読み込まれている場合は一度アンロード
+                if ext in self.extensions:
+                    await self.unload_extension(ext)
+                    logger.info(f'🔄 拡張機能をアンロードしました: {ext}')
+                
+                # 拡張機能をロード
                 await self.load_extension(ext)
                 loaded_extensions.append(ext)
                 logger.info(f'✅ 拡張機能を読み込みました: {ext}')
+                
             except Exception as e:
                 failed_extensions.append((ext, str(e)))
                 logger.error(f'❌ 拡張機能の読み込みに失敗しました: {ext} - {e}', exc_info=True)
         
         # 読み込み結果をログに出力
         if loaded_extensions:
-            logger.info(f'✅ 読み込みに成功した拡張機能 ({len(loaded_extensions)}/{len(self.initial_extensions)}):\n' + 
+            logger.info(f'✅ 読み込みに成功した拡張機能 ({len(loaded_extensions)}/{len(required_extensions)}):\n' + 
                       '\n'.join(f'  • {ext}' for ext in loaded_extensions))
         
         if failed_extensions:
@@ -152,34 +172,73 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
             for ext, error in failed_extensions:
                 logger.warning(f'  • {ext}: {error}')
         
-        # 既存のコマンドを取得
-        existing_commands = {cmd.name for cmd in self.tree.get_commands()}
-        
-        # コマンドを手動で登録（重複を避ける）
-        for command in self.tree.walk_commands():
-            if isinstance(command, app_commands.Command) and command.name not in existing_commands:
-                try:
-                    self.tree.add_command(command)
-                    existing_commands.add(command.name)
-                    logger.info(f'✅ コマンドを登録しました: /{command.name}')
-                except Exception as e:
-                    logger.error(f'❌ コマンドの登録に失敗しました: /{command.name} - {e}')
-        
         # コマンドツリーを同期
         try:
+            # 同期前に登録されているコマンドを確認
+            before_sync_commands = {cmd.name for cmd in self.tree.get_commands()}
+            logger.info(f'同期前の登録コマンド数: {len(before_sync_commands)}')
+            
+            # コマンドツリーを同期
             synced = await self.tree.sync()
             logger.info(f'✅ コマンドを同期しました: {len(synced)} 件')
             
-            # 登録されているコマンドを確認
+            # 同期後のコマンドを確認
             registered_commands = self.tree.get_commands()
-            logger.info(f'登録されているコマンド ({len(registered_commands)}件):')
+            logger.info(f'同期後の登録コマンド数: {len(registered_commands)}')
             
-            for cmd in registered_commands:
-                cmd_info = f'  • /{cmd.name}'
-                if hasattr(cmd, 'description'):
-                    cmd_info += f' - {cmd.description}'
-                logger.info(cmd_info)
+            # 登録されているコマンドをログに出力
+            if registered_commands:
+                logger.info('登録されているコマンド一覧:')
+                for cmd in registered_commands:
+                    cmd_info = f'  • /{cmd.name}'
+                    if hasattr(cmd, 'description'):
+                        cmd_info += f' - {cmd.description}'
+                    logger.info(cmd_info)
+            
+            # 必要なコマンドがすべて登録されているか確認
+            required_commands = {'post', 'delete', 'list', 'search', 'edit', 'help'}
+            registered_command_names = {cmd.name for cmd in registered_commands}
+            missing_commands = required_commands - registered_command_names
+            
+            if missing_commands:
+                logger.warning(f'⚠️ 以下の必須コマンドが登録されていません: {missing_commands}')
                 
+                # 不足しているコマンドがある場合は、該当する拡張機能を再読み込み
+                for cmd in missing_commands:
+                    ext_name = f'cogs.thoughts.{cmd}'
+                    try:
+                        # 既存の拡張機能をアンロード
+                        if ext_name in self.extensions:
+                            await self.unload_extension(ext_name)
+                            logger.info(f'✅ 拡張機能をアンロードしました: {ext_name}')
+                        
+                        # 拡張機能を再読み込み
+                        await self.load_extension(ext_name)
+                        logger.info(f'✅ 拡張機能を再読み込みしました: {ext_name}')
+                        
+                    except Exception as e:
+                        logger.error(f'❌ 拡張機能の再読み込みに失敗しました: {ext_name} - {e}')
+                
+                # 再同期を試みる
+                try:
+                    synced = await self.tree.sync()
+                    logger.info(f'✅ コマンドを再同期しました: {len(synced)} 件')
+                    
+                    # 再同期後のコマンドを確認
+                    commands = self.tree.get_commands()
+                    logger.info(f'再同期後の登録コマンド数: {len(commands)}')
+                    
+                    if commands:
+                        logger.info('再登録後のコマンド一覧:')
+                        for cmd in commands:
+                            cmd_info = f'  • /{cmd.name}'
+                            if hasattr(cmd, 'description'):
+                                cmd_info += f' - {cmd.description}'
+                            logger.info(cmd_info)
+                    
+                except Exception as e:
+                    logger.error(f'❌ コマンドの再同期に失敗しました: {e}', exc_info=True)
+            
         except Exception as e:
             logger.error(f'❌ コマンドの同期に失敗しました: {e}', exc_info=True)
             
@@ -200,19 +259,61 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
         commands = self.tree.get_commands()
         logger.info(f'現在登録されているコマンド数: {len(commands)}')
         
-        # コマンドが登録されていない場合のみ再同期を試みる
-        if not commands:
-            logger.warning('⚠️ 登録されているコマンドがありません。再同期を試みます...')
+        # 登録されているコマンドを表示
+        if commands:
+            logger.info('登録されているコマンド一覧:')
+            for cmd in commands:
+                cmd_info = f'  • /{cmd.name}'
+                if hasattr(cmd, 'description'):
+                    cmd_info += f' - {cmd.description}'
+                logger.info(cmd_info)
+        
+        # 必要なコマンドが登録されているか確認
+        required_commands = {'post', 'delete'}
+        registered_commands = {cmd.name for cmd in commands}
+        missing_commands = required_commands - registered_commands
+        
+        if missing_commands:
+            logger.warning(f'⚠️ 以下の必須コマンドが登録されていません: {missing_commands}')
+            logger.info('コマンドを再登録します...')
+            
+            # 不足しているコマンドがある場合は、該当する拡張機能を再読み込み
+            for cmd in missing_commands:
+                ext_name = f'cogs.thoughts.{cmd}'
+                try:
+                    # 既存の拡張機能をアンロード
+                    if ext_name in self.extensions:
+                        await self.unload_extension(ext_name)
+                        logger.info(f'✅ 拡張機能をアンロードしました: {ext_name}')
+                    
+                    # 拡張機能を再読み込み
+                    await self.load_extension(ext_name)
+                    logger.info(f'✅ 拡張機能を再読み込みしました: {ext_name}')
+                    
+                except Exception as e:
+                    logger.error(f'❌ 拡張機能の再読み込みに失敗しました: {ext_name} - {e}')
+            
+            # コマンドを再同期
             try:
                 synced = await self.tree.sync()
-                logger.info(f'✅ コマンドを同期しました: {len(synced)} 件')
+                logger.info(f'✅ コマンドを再同期しました: {len(synced)} 件')
                 
-                # 再度コマンドを確認
+                # 再同期後のコマンドを確認
                 commands = self.tree.get_commands()
                 logger.info(f'再同期後の登録コマンド数: {len(commands)}')
                 
+                if commands:
+                    logger.info('再登録後のコマンド一覧:')
+                    for cmd in commands:
+                        cmd_info = f'  • /{cmd.name}'
+                        if hasattr(cmd, 'description'):
+                            cmd_info += f' - {cmd.description}'
+                        logger.info(cmd_info)
+                
             except Exception as e:
                 logger.error(f'❌ コマンドの再同期に失敗しました: {e}', exc_info=True)
+        else:
+            logger.info('✅ すべての必須コマンドが正しく登録されています')
         
         # 登録されているコマンドをログに出力
         if commands:
