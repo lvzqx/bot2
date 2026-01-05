@@ -1,26 +1,36 @@
+from __future__ import annotations
+
+import logging
+from contextlib import contextmanager
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import discord
 from discord import app_commands
 from discord.ext import commands
-import sqlite3
-import traceback
-import logging
-import re
-from typing import Tuple, Dict, Any, Optional, Union, List
-from contextlib import contextmanager
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
 
 # 型定義
 class MessageData:
-    def __init__(self, message_id: int, channel_id: int, post_id: int):
+    """メッセージデータを表すクラス"""
+    def __init__(self, message_id: int, channel_id: int, post_id: int) -> None:
         self.id = message_id
         self.channel_id = channel_id
         self.post_id = post_id
 
 class PostData:
-    def __init__(self, post_id: int, user_id: int, content: str, category: str, 
-                 is_anonymous: bool, is_private: bool, display_name: Optional[str] = None):
+    """投稿データを表すクラス"""
+    def __init__(
+        self, 
+        post_id: int, 
+        user_id: int, 
+        content: str, 
+        category: str, 
+        is_anonymous: bool, 
+        is_private: bool, 
+        display_name: Optional[str] = None
+    ) -> None:
         self.id = post_id
         self.user_id = user_id
         self.content = content
@@ -354,11 +364,17 @@ class Delete(commands.Cog):
     @app_commands.command(name="delete", description="メッセージIDで投稿を削除します")
     @app_commands.describe(message_id="削除するメッセージのID")
     @app_commands.guild_only()
-    async def delete(self, interaction: discord.Interaction, message_id: str):
-        """メッセージIDで投稿を削除します"""
+    async def delete(self, interaction: discord.Interaction, message_id: str) -> None:
+        """メッセージIDで投稿を削除します
+        
+        Args:
+            interaction: Discordインタラクション
+            message_id: 削除するメッセージのID
+        """
         await self._process_delete(interaction, message_id)
 
-async def setup(bot):
+async def setup(bot: commands.Bot) -> None:
+    """Cogをボットに追加"""
     cog = Delete(bot)
     await bot.add_cog(cog)
-    print(f"[Delete] Registered commands: {[cmd.name for cmd in cog.get_app_commands()]}")
+    logger.info(f"[Delete] Registered commands: {[cmd.name for cmd in cog.get_app_commands()]}")

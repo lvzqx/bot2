@@ -5,32 +5,18 @@ import contextlib
 import logging
 import os
 import re
-import sys
 import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple, TypedDict, Union, cast, TYPE_CHECKING
 
+import discord
+from discord import app_commands, Attachment, File, Interaction, Member, Message, TextChannel, Thread, User, ui
+from discord.ext import commands
+
 # 設定のインポート
-import sys
-from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from config import DEFAULT_AVATAR
-
-import discord
-from discord import (
-    app_commands,
-    Attachment,
-    File,
-    Interaction,
-    Member,
-    Message,
-    TextChannel,
-    Thread,
-    User,
-    ui,
-)
-from discord.ext import commands
 
 # 型チェック用のインポート
 if TYPE_CHECKING:
@@ -54,7 +40,6 @@ class PostData(TypedDict, total=False):
 MAX_CONTENT_LENGTH = 2000
 MAX_CATEGORY_LENGTH = 50
 DEFAULT_CATEGORY = 'その他'
-DEFAULT_AVATAR = 'https://cdn.discordapp.com/embed/avatars/0.png'  # 仮のデフォルトアバター
 
 class Post(commands.Cog):
     """投稿機能を提供するCog。
@@ -646,46 +631,9 @@ class Post(commands.Cog):
                 )
 
     @app_commands.command(name="post", description="新しい投稿を作成します")
-    @app_commands.describe(
-        content="投稿内容を入力してください",
-        category="カテゴリを入力してください（任意）",
-        is_anonymous="匿名で投稿するかどうか（デフォルト: 非表示）",
-        is_private="非公開で投稿するかどうか（デフォルト: 公開）"
-    )
     @app_commands.guild_only()
-    async def post(
-        self,
-        interaction: discord.Interaction,
-        content: str,
-        category: Optional[str] = None,
-        is_anonymous: bool = False,
-        is_private: bool = False
-    ):
-        """新しい投稿を作成します
-        
-        Args:
-            interaction: インタラクションオブジェクト
-            content: 投稿内容
-            category: カテゴリ（任意）
-            is_anonymous: 匿名で投稿するかどうか
-            is_private: 非公開で投稿するかどうか
-        """
-        # コンテンツの長さを検証
-        if len(content) > MAX_CONTENT_LENGTH:
-            await interaction.response.send_message(
-                f"❌ 投稿内容は{MAX_CONTENT_LENGTH}文字以内にしてください。",
-                ephemeral=True
-            )
-            return
-            
-        # カテゴリの長さを検証
-        if category and len(category) > MAX_CATEGORY_LENGTH:
-            await interaction.response.send_message(
-                f"❌ カテゴリは{MAX_CATEGORY_LENGTH}文字以内にしてください。",
-                ephemeral=True
-            )
-            return
-            
+    async def post(self, interaction: discord.Interaction) -> None:
+        """新しい投稿を作成します"""
         # モーダルを表示
         modal = self.PostModal(bot=self.bot)
         await interaction.response.send_modal(modal)
