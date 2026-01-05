@@ -29,10 +29,14 @@ class Post(commands.Cog):
         self.bot = bot
         self._init_db()
         logger.info("Post cog が初期化されました")
-    def __init__(self, bot: commands.Bot) -> None:
-        self.bot = bot
-        self._init_db()
-        logger.info("Post cog が初期化されました")
+
+    @app_commands.command(name="post", description="新しい投稿を作成します")
+    @app_commands.guild_only()
+    async def post(self, interaction: discord.Interaction) -> None:
+        """新しい投稿を作成します"""
+        logger.info(f"post コマンドが呼び出されました。ユーザー: {interaction.user}")
+        modal = self.PostModal()
+        await interaction.response.send_modal(modal)
 
     def _init_db(self) -> None:
         """データベースを初期化します。"""
@@ -151,10 +155,9 @@ class Post(commands.Cog):
             self.value = self.values[0]
             await interaction.response.defer()
     
-    class PostModal(ui.Modal, title='新規投稿'):
-        def __init__(self, bot: commands.Bot) -> None:
-            super().__init__(timeout=300)
-            self.bot = bot
+    class PostModal(ui.Modal):
+        def __init__(self) -> None:
+            super().__init__(title='新規投稿', timeout=300)
             self.is_public = True  # デフォルトは公開
             
             # メッセージ入力
@@ -200,35 +203,22 @@ class Post(commands.Cog):
         async def on_submit(self, interaction: discord.Interaction) -> None:
             await interaction.response.defer(ephemeral=True)
             
+            # モーダルから値を取得
+            message = self.message.value
+            category = self.category.value if self.category.value else None
+            image_url = self.image_url.value if self.image_url.value else None
+            is_public = self.visibility_select.value == 'public'
+            is_anonymous = self.anonymous.value.lower() == '匿名'
+            
+            # データベースに保存
             try:
-                # 入力値の検証
-                message = self.message.value.strip()
-                if not message:
-                    await interaction.followup.send(
-                        "❌ メッセージを入力してください。",
-                        ephemeral=True
-                    )
-                    return
-                
-                category = self.category.value.strip() if self.category.value else None
-                image_url = self.image_url.value.strip() if self.image_url.value else None
-                is_public = self.visibility_select.value == 'public'
-                is_anonymous = self.anonymous.value.strip().lower() == '匿名' if self.anonymous.value else False
-                
-                # 画像URLの検証
-                if image_url and not image_url.startswith(('http://', 'https://')):
-                    await interaction.followup.send(
-                        "❌ 画像URLは http:// または https:// で始まる必要があります。",
-                        ephemeral=True
-                    )
-                    return
-                
-                # データベースに保存
-                post_cog = self.bot.get_cog('Post')
+                post_cog = interaction.client.get_cog('Post')
                 if not post_cog:
-                    raise ValueError("Postコグが見つかりません")
-                    
-                is_anonymous = self.anonymous.value.strip().lower() == '匿名' if self.anonymous.value else False
+                    await interaction.followup.send(
+                        "❌ エラーが発生しました。もう一度お試しください。",
+                        ephemeral=True
+                    )
+                    return
                 
                 post_id = await post_cog._save_post_to_db(
                     interaction.user.id,
@@ -247,15 +237,27 @@ class Post(commands.Cog):
                         raise ValueError("公開用の投稿チャンネルが見つかりません")
                     
                     # 埋め込みメッセージを作成
-                    embed = await post_cog._create_post_embed(
-                        post_id,
-                        interaction.user.id,
-                        message,
-                        category,
-                        image_url,
-                        is_public,
-                        is_anonymous
+                    embed = discord.Embed(
+                        description=message,
+                        color=discord.Color.blue()
                     )
+                    
+                    # 投稿者情報を追加（匿名設定に応じて表示を変更）
+                    if is_anonymous:
+                        embed.set_author(name="匿名ユーザー", icon_url=DEFAULT_AVATAR)
+                    else:
+                        embed.set_author(name=str(interaction.user), icon_url=interaction.user.display_avatar.url)
+                    
+                    # カテゴリを追加
+                    if category:
+                        embed.add_field(name="カテゴリ", value=category, inline=True)
+                    
+                    # 投稿IDを追加
+                    embed.add_field(name="投稿ID", value=f"`{post_id}`", inline=True)
+                    
+                    # 画像を追加（ある場合）
+                    if image_url:
+                        embed.set_image(url=image_url)
                     
                     # メッセージを送信
                     sent_message = await channel.send(embed=embed)
@@ -345,15 +347,6 @@ class Post(commands.Cog):
                     ephemeral=True
                 )
 
-    @app_commands.command(name="post", description="新しい投稿を作成します")
-    @app_commands.guild_only()
-    async def post(self, interaction: discord.Interaction) -> None:
-        """新しい投稿を作成します"""
-        print(f"post コマンドが呼び出されました: {interaction.user}")
-        print(f"利用可能なコマンド: {[cmd.name for cmd in self.bot.tree.get_commands()]}")
-        logger.info(f"post コマンドが呼び出されました。ユーザー: {interaction.user}")
-        # モーダルを表示
-        await interaction.response.send_modal(self.PostModal(self.bot))
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Post(bot))
