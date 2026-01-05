@@ -662,4 +662,6 @@ class Post(commands.Cog):
 
 
 async def setup(bot):
-    await bot.add_cog(Post(bot))
+    cog = Post(bot)
+    await bot.add_cog(cog)
+    print(f"[Post] Registered commands: {[cmd.name for cmd in cog.get_app_commands()]}")

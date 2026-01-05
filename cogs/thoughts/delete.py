@@ -358,4 +358,6 @@ class Delete(commands.Cog):
         await self._process_delete(interaction, message_id)
 
 async def setup(bot):
-    await bot.add_cog(Delete(bot))
+    cog = Delete(bot)
+    await bot.add_cog(cog)
+    print(f"[Delete] Registered commands: {[cmd.name for cmd in cog.get_app_commands()]}")

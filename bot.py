@@ -45,9 +45,15 @@ class ThoughtBot(commands.Bot):
             except Exception as e:
                 print(f'❌ Failed to load extension {ext}: {e}')
         
-        # コマンドツリーの同期（コメントアウト）
-        # await self.tree.sync()
-        print('✅ コマンドツリーを同期しました')
+        # コマンドツリーの同期（グローバル）
+        synced = await self.tree.sync()
+        print(f'✅ コマンドツリーを同期しました: {len(synced)} コマンド')
+        
+        # 登録されているコマンドを表示
+        commands_list = [f"• /{cmd.name}" for cmd in self.tree.get_commands()]
+        print("登録されているコマンド:")
+        for cmd in commands_list:
+            print(f"  {cmd}")
 
     def init_db(self):
         cursor = self.db.cursor()
