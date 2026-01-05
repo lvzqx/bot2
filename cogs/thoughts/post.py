@@ -679,54 +679,18 @@ class Post(commands.Cog):
                     ephemeral=True
                 )
 
-    # コマンドをクラスメソッドとして定義
     @app_commands.command(name="post", description="新しい投稿を作成します")
     @app_commands.guild_only()
-    async def post_command(self, interaction: discord.Interaction) -> None:
+    async def post(self, interaction: discord.Interaction) -> None:
         """新しい投稿を作成します"""
         logger.info(f"post コマンドが呼び出されました。ユーザー: {interaction.user}")
         # モーダルを表示
         modal = self.PostModal(bot=self.bot)
         await interaction.response.send_modal(modal)
-        
-    # コマンドを登録するためのメソッドを追加
-    async def register_commands(self):
-        """コマンドを登録します"""
-        try:
-            # コマンドをツリーに追加
-            self.bot.tree.add_command(
-                app_commands.Command(
-                    name="post",
-                    description="新しい投稿を作成します",
-                    callback=self.post_command,
-                    guild_only=True
-                )
-            )
-            logger.info("✅ post コマンドを登録しました")
-            return True
-        except Exception as e:
-            logger.error(f"❌ post コマンドの登録に失敗しました: {e}", exc_info=True)
-            return False
 
 
-async def setup(bot: commands.Bot) -> bool:
-    """Cogをボットに追加
-    
-    Returns:
-        bool: ロードが成功したかどうか
-    """
-    try:
-        cog = Post(bot)
-        await bot.add_cog(cog)
-        
-        # コマンドを登録
-        success = await cog.register_commands()
-        if success:
-            logger.info("✅ Post コグのセットアップが完了しました")
-        else:
-            logger.error("❌ Post コグのコマンド登録に失敗しました")
-            
-        return success
-    except Exception as e:
-        logger.error(f"[Post] コグのロードに失敗しました: {e}", exc_info=True)
-        return False
+async def setup(bot):
+    cog = Post(bot)
+    await bot.add_cog(cog)
+    logger.info(f"[Post] コグがロードされました。登録コマンド: post")
+    return True
