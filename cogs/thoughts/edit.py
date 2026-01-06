@@ -144,7 +144,7 @@ class Edit(commands.Cog):
             self.category = self.category_input = ui.TextInput(
                 label="カテゴリー（任意）",
                 style=discord.TextStyle.short,
-                placeholder="例: 日記, 質問, 雑談 など",
+                placeholder="例: 独り言, 愚痴, 考えごと など",
                 default=current_category or "",
                 max_length=MAX_CATEGORY_LENGTH,
                 required=False
@@ -267,6 +267,7 @@ class Edit(commands.Cog):
             Args:
                 interaction: インタラクションオブジェクト
             """
+            print(f"[DEBUG] on_submit が呼び出されました: post_id={self.post_id}")
             self._interaction = interaction
             
             # 入力値のバリデーション
@@ -357,11 +358,13 @@ class Edit(commands.Cog):
                 # Discordメッセージを更新（エラーが無視されるように）
                 print(f"[DEBUG] Discordメッセージ更新を開始します: post_id={self.post_id}")
                 try:
+                    print(f"[DEBUG] _update_discord_message を呼び出します")
                     await self._update_discord_message(interaction, content, category, image_url)
                     print(f"[DEBUG] Discordメッセージ更新が完了しました")
                 except Exception as e:
                     logger.warning(f"Discordメッセージの更新に失敗しましたが、データベースは更新されています: {e}")
                     print(f"[DEBUG] Discordメッセージ更新エラー: {e}")
+                print(f"[DEBUG] Discordメッセージ更新処理を終了します")
                 
                 # 成功メッセージを送信
                 await interaction.response.send_message(
@@ -669,64 +672,6 @@ class Edit(commands.Cog):
             except sqlite3.Error as e:
                 logger.error(f"Failed to update post {post_id}: {e}", exc_info=True)
                 return None
-        
-        async def _update_discord_message(
-            self, 
-            post_id: int, 
-            content: str, 
-            category: str, 
-            image_url: Optional[str], 
-            is_anonymous: bool, 
-            display_name: str,
-            interaction: discord.Interaction
-        ) -> None:
-            """Discordのメッセージを更新します。"""
-            try:
-                with self._get_db_connection() as conn:
-                    with self._get_cursor(conn) as cursor:
-                        cursor.execute('''
-                            SELECT message_id, channel_id 
-                            FROM message_references 
-                            WHERE post_id = ?
-                        ''', (post_id,))
-                        
-                        message_ref = cursor.fetchone()
-                        if not message_ref:
-                            return
-                            
-                        message_id, channel_id = message_ref
-                        channel = self.bot.get_channel(int(channel_id))
-                        if not channel:
-                            return
-                            
-                        message = await channel.fetch_message(int(message_id))
-                        
-                        # 埋め込みメッセージを作成
-                        embed = discord.Embed(
-                            description=content,
-                            color=discord.Color.blue()
-                        )
-                        
-                        # 表示名を設定
-                        if is_anonymous:
-                            embed.set_author(name='匿名')
-                        else:
-                            embed.set_author(
-                                name=display_name or interaction.user.display_name,
-                                icon_url=str(interaction.user.display_avatar.url)
-                            )
-                        
-                        # フッターにカテゴリーと投稿IDを表示
-                        embed.set_footer(text=f'カテゴリー: {category} | ID: {post_id}')
-                        
-                        # 画像があれば追加
-                        if image_url:
-                            embed.set_image(url=image_url)
-                        
-                        await message.edit(embed=embed)
-                        
-            except Exception as e:
-                logger.error(f"Failed to update Discord message for post {post_id}: {e}", exc_info=True)
         
     class PostSelect(discord.ui.Select):
         def __init__(self, posts):
