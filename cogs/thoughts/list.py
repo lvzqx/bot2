@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
+from contextlib import contextmanager
 from typing import List, Dict, Any, Optional, Tuple, Union
 from datetime import datetime
 
@@ -26,6 +28,49 @@ class List(commands.Cog):
         self.bot: commands.Bot = bot
         logger.info("List cog が初期化されました")
     
+    @contextmanager
+    def _get_db_connection(self) -> Iterator[sqlite3.Connection]:
+        """データベース接続を取得するコンテキストマネージャー
+        
+        Yields:
+            sqlite3.Connection: データベース接続オブジェクト
+            
+        Raises:
+            sqlite3.Error: データベース接続に失敗した場合
+        """
+        conn = None
+        try:
+            conn = sqlite3.connect('thoughts.db')
+            conn.execute("PRAGMA foreign_keys = ON")
+            conn.execute("PRAGMA journal_mode = WAL")
+            conn.execute("PRAGMA synchronous = NORMAL")
+            conn.execute("PRAGMA cache_size = -2000000")  # 2GB
+            conn.execute("PRAGMA temp_store = MEMORY")
+            conn.row_factory = sqlite3.Row
+            yield conn
+        except sqlite3.Error as e:
+            logger.error(f"データベース接続エラー: {e}", exc_info=True)
+            raise
+        finally:
+            if conn:
+                conn.close()
+    
+    @contextmanager
+    def _get_cursor(self, conn: sqlite3.Connection) -> Iterator[sqlite3.Cursor]:
+        """データベースカーソルを取得するコンテキストマネージャー
+        
+        Args:
+            conn: データベース接続オブジェクト
+            
+        Yields:
+            sqlite3.Cursor: データベースカーソル
+        """
+        cursor = conn.cursor()
+        try:
+            yield cursor
+        finally:
+            cursor.close()
+
     async def _fetch_user_posts(self, user_id: int, limit: int) -> List[PostData]:
         """ユーザーの投稿をデータベースから取得します。
         
@@ -40,14 +85,8 @@ class List(commands.Cog):
             sqlite3.Error: データベース操作に失敗した場合
         """
         try:
-            # Post コグを取得
-            post_cog = self.bot.get_cog('Post')
-            if not post_cog or not hasattr(post_cog, '_get_db_connection'):
-                logger.error("Post コグが見つからないか、データベースにアクセスできません")
-                return []
-                
-            with post_cog._get_db_connection() as conn:
-                with post_cog._get_cursor(conn) as cursor:
+            with self._get_db_connection() as conn:
+                with self._get_cursor(conn) as cursor:
                     # 必要なデータを一度のクエリで取得（サブクエリを使用）
                     cursor.execute('''
                         SELECT 
