@@ -27,8 +27,18 @@ class Post(commands.Cog):
     @app_commands.guild_only()
     async def post(self, interaction: discord.Interaction) -> None:
         """新しい投稿を作成します"""
-        logger.info(f"post コマンドが呼び出されました。ユーザー: {interaction.user}")
-        await interaction.response.send_modal(PostModal())
+        try:
+            logger.info(f"post コマンドが呼び出されました。ユーザー: {interaction.user}")
+            modal = PostModal()  # モーダルインスタンスを作成
+            await interaction.response.send_modal(modal)  # モーダルを表示
+            logger.info("モーダルを表示しました")
+        except Exception as e:
+            logger.error(f"モーダル表示中にエラーが発生しました: {e}")
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    "エラーが発生しました。もう一度お試しください。",
+                    ephemeral=True
+                )
 
     @contextmanager
     def _get_db_connection(self) -> sqlite3.Connection:
@@ -92,7 +102,7 @@ class Post(commands.Cog):
     
     class PostModal(ui.Modal, title='新規投稿'):
         def __init__(self) -> None:
-            super().__init__(timeout=300)
+            super().__init__(timeout=300)  # 明示的にタイムアウトを設定
             self.is_public = True  # デフォルトは公開
             
             # メッセージ入力
@@ -103,7 +113,6 @@ class Post(commands.Cog):
                 max_length=1000,
                 required=True
             )
-            self.add_item(self.message)
             
             # カテゴリ入力
             self.category = ui.TextInput(
@@ -112,7 +121,6 @@ class Post(commands.Cog):
                 max_length=50,
                 required=False
             )
-            self.add_item(self.category)
             
             # 画像URL入力
             self.image_url = ui.TextInput(
@@ -120,12 +128,6 @@ class Post(commands.Cog):
                 placeholder='画像のURLを入力（https://...）',
                 required=False
             )
-            self.add_item(self.image_url)
-            
-            # 公開/非公開選択（ビューとして追加）
-            self.visibility_select = Post.VisibilitySelect()
-            self.visibility_view = ui.View(timeout=300)
-            self.visibility_view.add_item(self.visibility_select)
             
             # 匿名設定
             self.anonymous = ui.TextInput(
@@ -133,7 +135,17 @@ class Post(commands.Cog):
                 placeholder='「匿名」と入力すると匿名で投稿します',
                 required=False
             )
+            
+            # UIコンポーネントを追加
+            self.add_item(self.message)
+            self.add_item(self.category)
+            self.add_item(self.image_url)
             self.add_item(self.anonymous)
+            
+            # 公開/非公開選択（ビューとして追加）
+            self.visibility_select = Post.VisibilitySelect()
+            self.visibility_view = ui.View(timeout=300)
+            self.visibility_view.add_item(self.visibility_select)
 
         async def on_submit(self, interaction: discord.Interaction) -> None:
             """フォームが送信されたときの処理"""
