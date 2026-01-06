@@ -84,8 +84,13 @@ class Post(commands.Cog):
             self.add_item(self.anonymous)
             
             # 公開/非公開選択を追加
-            self.visibility_select = Post.VisibilitySelect()
-            self.add_item(self.visibility_select)
+            self.visibility = ui.TextInput(
+                label='公開設定',
+                placeholder='「公開」または「非公開」と入力してください',
+                default='公開',
+                required=True
+            )
+            self.add_item(self.visibility)
 
         async def on_submit(self, interaction: discord.Interaction) -> None:
             """フォームが送信されたときの処理"""
@@ -95,7 +100,7 @@ class Post(commands.Cog):
             message = self.message.value
             category = self.category.value if self.category.value else None
             image_url = self.image_url.value if self.image_url.value else None
-            is_public = self.visibility_select.value == 'public'
+            is_public = self.visibility.value == '公開'
             is_anonymous = self.anonymous.value and self.anonymous.value.lower() == '匿名'
             
             # データベースに保存
@@ -373,8 +378,13 @@ class Post(commands.Cog):
             self.add_item(self.anonymous)
             
             # 公開/非公開選択を追加
-            self.visibility_select = Post.VisibilitySelect()
-            self.add_item(self.visibility_select)
+            self.visibility = ui.TextInput(
+                label='公開設定',
+                placeholder='「公開」または「非公開」と入力してください',
+                default='公開',
+                required=True
+            )
+            self.add_item(self.visibility)
 
         async def on_submit(self, interaction: discord.Interaction) -> None:
             """フォームが送信されたときの処理"""
@@ -384,7 +394,7 @@ class Post(commands.Cog):
             message = self.message.value
             category = self.category.value if self.category.value else None
             image_url = self.image_url.value if self.image_url.value else None
-            is_public = self.visibility_select.value == 'public'
+            is_public = self.visibility.value == '公開'
             is_anonymous = self.anonymous.value.lower() == '匿名'
             
             # データベースに保存
