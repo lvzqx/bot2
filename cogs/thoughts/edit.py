@@ -50,52 +50,43 @@ class Edit(commands.Cog):
     
     @contextmanager
     def _get_db_connection(self) -> Iterator[sqlite3.Connection]:
-        """データベース接続を取得するコンテキストマネージャー
+        """データベース接続を取得します。
         
         Yields:
-            sqlite3.Connection: データベース接続オブジェクト
-            
-        Raises:
-            sqlite3.Error: データベース接続に失敗した場合
+            sqlite3.Connection: データベース接続
         """
-        conn = None
         try:
-            # Post コグからデータベース接続を取得
-            post_cog = self.bot.get_cog('Post')
-            if not post_cog or not hasattr(post_cog, '_get_db_connection'):
-                logger.error("Post コグが見つからないか、データベースにアクセスできません")
-                raise sqlite3.Error("データベースに接続できません")
-                
-            with post_cog._get_db_connection() as conn:
-                # PRAGMA 設定を適用
-                conn.execute("PRAGMA foreign_keys = ON")
-                conn.execute("PRAGMA journal_mode = WAL")
-                conn.execute("PRAGMA synchronous = NORMAL")
-                conn.execute("PRAGMA cache_size = -2000000")  # 2GB
-                conn.execute("PRAGMA temp_store = MEMORY")
-                conn.row_factory = sqlite3.Row
-                yield conn
-                
+            conn = sqlite3.connect('thoughts.db')
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA foreign_keys = ON")
+            yield conn
         except sqlite3.Error as e:
             logger.error(f"データベース接続エラー: {e}", exc_info=True)
             raise
-            
+        finally:
+            if 'conn' in locals():
+                conn.close()
+    
     @contextmanager
     def _get_cursor(self, conn: sqlite3.Connection) -> Iterator[sqlite3.Cursor]:
-        """データベースカーソルを取得するコンテキストマネージャー
+        """データベースカーソルを取得します。
         
         Args:
-            conn: データベース接続オブジェクト
+            conn: データベース接続
             
         Yields:
             sqlite3.Cursor: データベースカーソル
         """
-        cursor = conn.cursor()
         try:
+            cursor = conn.cursor()
             yield cursor
+        except sqlite3.Error as e:
+            logger.error(f"カーソル操作エラー: {e}", exc_info=True)
+            raise
         finally:
-            cursor.close()
-
+            if 'cursor' in locals():
+                cursor.close()
+    
     class EditModal(ui.Modal):
         """投稿編集用のモーダル
         
