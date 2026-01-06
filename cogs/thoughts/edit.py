@@ -382,18 +382,18 @@ class Edit(commands.Cog):
                 return False, "❌ カテゴリーを入力してください。", None, None, None, None, None
             
             # 表示名のバリデーション
-            display_option = self.is_anonymous_input.value.strip()
+            display_option = self.is_anonymous.value.strip()
             if display_option not in ['表示', '匿名']:
                 return False, "❌ 表示名は「表示」または「匿名」で入力してください。", None, None, None, None, None
             
             # 公開設定のバリデーション
-            privacy_option = self.is_private_input.value.strip()
+            privacy_option = self.is_private.value.strip()
             if privacy_option not in ['公開', '非公開']:
                 return False, "❌ 公開設定は「公開」または「非公開」で入力してください。", None, None, None, None, None
             
             is_anonymous = display_option == '匿名'
             is_private = privacy_option == '非公開'
-            image_url = self.image_url_input.value.strip() or None
+            image_url = self.image_url.value.strip() or None
             
             return True, None, content, category, is_anonymous, is_private, image_url
         
