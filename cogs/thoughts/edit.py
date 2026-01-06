@@ -361,59 +361,8 @@ class Edit(commands.Cog):
                     ephemeral=True
                 )
             
-            super().__init__(title=f'投稿を編集 (ID: {post_id})', *args, **kwargs)
-            
-            # 内容入力フィールド
-            self.content = discord.ui.TextInput(
-                label='内容 (最大2000文字)',
-                default=current_content,
-                placeholder='投稿の内容を入力してください...',
-                required=True,
-                max_length=2000,
-                min_length=1,
-                style=discord.TextStyle.long
-            )
-            self.add_item(self.content)
-            
-            # カテゴリー入力フィールド
-            self.category = discord.ui.TextInput(
-                label='カテゴリー',
-                default=current_category,
-                placeholder='カテゴリーを入力してください...',
-                required=True,
-                max_length=50,
-                min_length=1
-            )
-            self.add_item(self.category)
-            
-            # 画像URL入力フィールド
-            self.image_url = discord.ui.TextInput(
-                label='画像URL (削除する場合は空欄)',
-                default=current_image_url or '',
-                placeholder='画像のURLを入力...',
-                required=False
-            )
-            self.add_item(self.image_url)
-            
-            # 表示名設定
-            self.is_anonymous = discord.ui.TextInput(
-                label='表示名',
-                placeholder='名前を表示する場合は「表示」、匿名の場合は「匿名」と入力',
-                default='匿名' if current_is_anonymous else '表示',
-                required=True,
-                max_length=2
-            )
-            self.add_item(self.is_anonymous)
-            
-            # 公開設定
-            self.is_private = discord.ui.TextInput(
-                label='公開設定',
-                placeholder='公開する場合は「公開」、非公開の場合は「非公開」と入力',
-                default='非公開' if current_is_private else '公開',
-                required=True,
-                max_length=3
-            )
-            self.add_item(self.is_private)
+            # discord.ui.Modal の既定の on_error も呼び出す
+            await super().on_error(interaction, error)
         
         async def _validate_inputs(self) -> Tuple[bool, Optional[str], Optional[str], Optional[bool], Optional[bool], Optional[str]]:
             """入力値のバリデーションを行います。
@@ -679,14 +628,14 @@ class Edit(commands.Cog):
             post_id = int(self.values[0])
             
             # 選択された投稿を取得
-            cursor = self.view.cog.bot.db.cursor()
-            cursor.execute('''
-                SELECT content, category, image_url, is_anonymous, is_private, user_id
-                FROM thoughts 
-                WHERE id = ? AND user_id = ?
-            ''', (post_id, interaction.user.id))
-            
-            post = cursor.fetchone()
+            with self.view.cog._get_db_connection() as conn:
+                with self.view.cog._get_cursor(conn) as cursor:
+                    cursor.execute('''
+                        SELECT content, category, image_url, is_anonymous, is_private, user_id
+                        FROM thoughts 
+                        WHERE id = ? AND user_id = ?
+                    ''', (post_id, interaction.user.id))
+                    post = cursor.fetchone()
             
             if not post:
                 if not interaction.response.is_done():
@@ -726,27 +675,27 @@ class Edit(commands.Cog):
     async def edit_post(
         self, 
         interaction: discord.Interaction, 
-        post_id: int = None
+        post_id: Optional[int] = None
     ):
         """投稿を編集します（モーダルで編集）"""
         try:
             # post_idが指定されている場合は直接編集モーダルを表示
             if post_id is not None:
                 # データベースから投稿を取得
-                cursor = self.bot.db.cursor()
-                cursor.execute('''
-                    SELECT content, category, user_id 
-                    FROM thoughts 
-                    WHERE id = ?
-                ''', (post_id,))
-                
-                post = cursor.fetchone()
+                with self._get_db_connection() as conn:
+                    with self._get_cursor(conn) as cursor:
+                        cursor.execute('''
+                            SELECT content, category, image_url, is_anonymous, is_private, user_id
+                            FROM thoughts 
+                            WHERE id = ?
+                        ''', (post_id,))
+                        post = cursor.fetchone()
                 
                 if not post:
                     await interaction.response.send_message("❌ 指定された投稿が見つかりません。", ephemeral=True)
                     return
                 
-                current_content, current_category, post_user_id = post
+                current_content, current_category, current_image_url, current_is_anonymous, current_is_private, post_user_id = post
                 
                 # 権限チェック（投稿者本人または管理者のみ編集可能）
                 is_owner = post_user_id == interaction.user.id
@@ -770,16 +719,16 @@ class Edit(commands.Cog):
                 return
                 
             # post_idが指定されていない場合は投稿一覧を表示
-            cursor = self.bot.db.cursor()
-            cursor.execute('''
-                SELECT id, content, category
-                FROM thoughts 
-                WHERE user_id = ?
-                ORDER BY created_at DESC
-                LIMIT 25
-            ''', (interaction.user.id,))
-            
-            posts = cursor.fetchall()
+            with self._get_db_connection() as conn:
+                with self._get_cursor(conn) as cursor:
+                    cursor.execute('''
+                        SELECT id, content, category
+                        FROM thoughts 
+                        WHERE user_id = ?
+                        ORDER BY created_at DESC
+                        LIMIT 25
+                    ''', (interaction.user.id,))
+                    posts = cursor.fetchall()
             
             if not posts:
                 await interaction.response.send_message("❌ 編集可能な投稿が見つかりませんでした。", ephemeral=True)

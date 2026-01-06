@@ -487,31 +487,56 @@ class Post(commands.Cog):
                     if not private_channel:
                         raise ValueError("非公開用の投稿チャンネルが見つかりません")
                     
-                    # 非公開投稿の場合はプライベートスレッドを作成
-                    thread_name = f"非公開投稿 - {interaction.user.name}"
-                    if category:
-                        thread_name += f" - {category}"
-                    
-                    try:
-                        thread = await private_channel.create_thread(
-                            name=thread_name[:100],
-                            type=discord.ChannelType.private_thread,
-                            reason=f"非公開投稿のスレッド作成 - {interaction.user.id}",
-                            invitable=False
-                        )
-                    except discord.Forbidden:
-                        await interaction.followup.send(
-                            "❌ 非公開スレッドを作成する権限がありません。（botにスレッド作成/管理権限が必要です）",
-                            ephemeral=True
-                        )
-                        return
-                    except discord.HTTPException as e:
-                        logger.error(f"スレッド作成に失敗しました: {e}", exc_info=True)
-                        await interaction.followup.send(
-                            "❌ 非公開スレッドの作成に失敗しました。",
-                            ephemeral=True
-                        )
-                        return
+                    # 非公開投稿はユーザーごとに1本のプライベートスレッドを再利用
+                    thread_prefix = f"非公開投稿 - {interaction.user.id}"
+                    target_thread: Optional[discord.Thread] = None
+
+                    # アクティブスレッドから検索
+                    for t in private_channel.threads:
+                        if t.name.startswith(thread_prefix):
+                            target_thread = t
+                            break
+
+                    # アーカイブ済みスレッドからも検索（存在すれば復帰して利用）
+                    if target_thread is None:
+                        try:
+                            async for t in private_channel.archived_threads(private=True, limit=50):
+                                if t.name.startswith(thread_prefix):
+                                    target_thread = t
+                                    break
+                        except Exception as e:
+                            logger.warning(f"アーカイブスレッドの取得に失敗しました: {e}")
+
+                    if target_thread is not None:
+                        thread = target_thread
+                        try:
+                            if thread.archived:
+                                await thread.edit(archived=False, locked=False)
+                        except Exception as e:
+                            logger.warning(f"スレッドの復帰に失敗しました: {e}")
+                    else:
+                        # 見つからなければ作成
+                        thread_name = f"{thread_prefix} ({interaction.user.name})"
+                        try:
+                            thread = await private_channel.create_thread(
+                                name=thread_name[:100],
+                                type=discord.ChannelType.private_thread,
+                                reason=f"非公開投稿のスレッド作成 - {interaction.user.id}",
+                                invitable=False
+                            )
+                        except discord.Forbidden:
+                            await interaction.followup.send(
+                                "❌ 非公開スレッドを作成する権限がありません。（botにスレッド作成/管理権限が必要です）",
+                                ephemeral=True
+                            )
+                            return
+                        except discord.HTTPException as e:
+                            logger.error(f"スレッド作成に失敗しました: {e}", exc_info=True)
+                            await interaction.followup.send(
+                                "❌ 非公開スレッドの作成に失敗しました。",
+                                ephemeral=True
+                            )
+                            return
                     
                     await thread.add_user(interaction.user)
 
