@@ -234,7 +234,7 @@ class Delete(commands.Cog):
                 if isinstance(channel, discord.Thread):
                     # 権限チェック
                     has_permission = (
-                        str(channel.owner_id) == str(interaction.user.id) or  # スレッドの作成者
+                        str(message_data['user_id']) == str(interaction.user.id) or  # 投稿者
                         interaction.user.guild_permissions.administrator or  # 管理者
                         interaction.user.guild_permissions.manage_threads  # スレッド管理権限
                     )
@@ -257,11 +257,22 @@ class Delete(commands.Cog):
                         return
                     except discord.Forbidden:
                         logger.warning(f"スレッドの削除権限がありません: {channel.id}")
-                        await interaction.followup.send(
-                            "❌ スレッドを削除する権限がありません。",
-                            ephemeral=True
-                        )
-                        return
+                        # 削除できない場合はアーカイブ/ロックでフォールバック
+                        try:
+                            await channel.edit(archived=True, locked=True)
+                            logger.info(f"スレッド {channel.id} をアーカイブ/ロックしました")
+                            await interaction.followup.send(
+                                "✅ 投稿を削除しました。（スレッドは削除権限がないため、アーカイブ/ロックしました）",
+                                ephemeral=True
+                            )
+                            return
+                        except Exception as e:
+                            logger.warning(f"スレッドのアーカイブ/ロックにも失敗しました: {e}")
+                            await interaction.followup.send(
+                                "✅ 投稿を削除しました。（スレッドの削除/非表示化に失敗しました。bot権限を確認してください）",
+                                ephemeral=True
+                            )
+                            return
                     except discord.HTTPException as e:
                         logger.error(f"スレッドの削除中にエラーが発生しました: {e}")
                         await interaction.followup.send(
