@@ -18,6 +18,215 @@ from config import CHANNELS, DEFAULT_AVATAR
 # ロガーの設定
 logger = logging.getLogger(__name__)
 
+class VisibilitySelect(ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label='公開', value='public', description='誰でも見ることができます', emoji='👥'),
+            discord.SelectOption(label='非公開', value='private', description='自分と管理者のみが削除できます', emoji='🔒')
+        ]
+        super().__init__(
+            placeholder='公開設定を選択...',
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+        self.value = 'public'  # デフォルト値
+        
+    async def callback(self, interaction: discord.Interaction):
+        self.value = self.values[0]
+        await interaction.response.defer()
+
+class PostModal(ui.Modal, title='新規投稿'):
+    def __init__(self) -> None:
+        super().__init__(timeout=300)  # 明示的にタイムアウトを設定
+        self.is_public = True  # デフォルトは公開
+        
+        # メッセージ入力
+        self.message = ui.TextInput(
+            label='メッセージ',
+            placeholder='投稿するメッセージを入力してください...',
+            style=discord.TextStyle.paragraph,
+            max_length=1000,
+            required=True
+        )
+        
+        # カテゴリ入力
+        self.category = ui.TextInput(
+            label='カテゴリ',
+            placeholder='カテゴリを入力（例: 独り言, 愚痴, 考えごと など）',
+            max_length=50,
+            required=False
+        )
+        
+        # 画像URL入力
+        self.image_url = ui.TextInput(
+            label='画像URL（任意）',
+            placeholder='画像のURLを入力（https://...）',
+            required=False
+        )
+        
+        # 匿名設定
+        self.anonymous = ui.TextInput(
+            label='表示名（任意）',
+            placeholder='「匿名」と入力すると匿名で投稿します',
+            required=False
+        )
+        
+        # UIコンポーネントを追加
+        self.add_item(self.message)
+        self.add_item(self.category)
+        self.add_item(self.image_url)
+        self.add_item(self.anonymous)
+        
+        # 公開/非公開選択（ビューとして追加）
+        self.visibility_select = VisibilitySelect()
+        self.visibility_view = ui.View(timeout=300)
+        self.visibility_view.add_item(self.visibility_select)
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        """フォームが送信されたときの処理"""
+        await interaction.response.defer(ephemeral=True)
+        
+        # モーダルから値を取得
+        message = self.message.value
+        category = self.category.value if self.category.value else None
+        image_url = self.image_url.value if self.image_url.value else None
+        is_public = self.visibility_select.value == 'public'
+        is_anonymous = self.anonymous.value.lower() == '匿名'
+        
+        # データベースに保存
+        try:
+            post_cog = interaction.client.get_cog('Post')
+            if not post_cog:
+                await interaction.followup.send(
+                    "❌ エラーが発生しました。もう一度お試しください。",
+                    ephemeral=True
+                )
+                return
+            
+            post_id = await post_cog._save_post_to_db(
+                interaction.user.id,
+                message,
+                category,
+                image_url,
+                is_public,
+                is_anonymous
+            )
+            
+            # 公開/非公開でチャンネルを分ける
+            if is_public:
+                # 公開チャンネルに投稿
+                channel = interaction.guild.get_channel(CHANNELS['public'])
+                if not channel:
+                    raise ValueError("公開用の投稿チャンネルが見つかりません")
+                
+                # 埋め込みメッセージを作成
+                embed = discord.Embed(
+                    description=message,
+                    color=discord.Color.blue()
+                )
+                
+                # 投稿者情報を追加（匿名設定に応じて表示を変更）
+                if is_anonymous:
+                    embed.set_author(name="匿名ユーザー", icon_url=DEFAULT_AVATAR)
+                else:
+                    embed.set_author(name=str(interaction.user), icon_url=interaction.user.display_avatar.url)
+                
+                # カテゴリを追加
+                if category:
+                    embed.add_field(name="カテゴリ", value=category, inline=True)
+                
+                # 投稿IDを追加
+                embed.add_field(name="投稿ID", value=f"`{post_id}`", inline=True)
+                
+                # 画像を追加（ある場合）
+                if image_url:
+                    embed.set_image(url=image_url)
+                
+                # メッセージを送信
+                sent_message = await channel.send(embed=embed)
+            else:
+                # 非公開チャンネルを取得
+                private_channel = interaction.guild.get_channel(CHANNELS['private'])
+                if not private_channel:
+                    raise ValueError("非公開用の投稿チャンネルが見つかりません")
+                
+                # 非公開チャンネルに投稿
+                embed = discord.Embed(
+                    description=message,
+                    color=discord.Color.dark_grey()
+                )
+                
+                # 投稿者情報を追加（匿名設定に応じて表示を変更）
+                if is_anonymous:
+                    embed.set_author(name="匿名ユーザー", icon_url=DEFAULT_AVATAR)
+                else:
+                    embed.set_author(name=str(interaction.user), icon_url=interaction.user.display_avatar.url)
+                
+                # カテゴリを追加
+                if category:
+                    embed.add_field(name="カテゴリ", value=category, inline=True)
+                
+                # 投稿IDを追加
+                embed.add_field(name="投稿ID", value=f"`{post_id}`", inline=True)
+                
+                # 画像を追加（ある場合）
+                if image_url:
+                    embed.set_image(url=image_url)
+                
+                # 非公開チャンネルに送信
+                sent_message = await private_channel.send(embed=embed)
+                
+                # 投稿者には通常の完了メッセージを送信
+                embed = discord.Embed(
+                    title="✅ 非公開で投稿が完了しました！",
+                    description=f"この投稿は管理者のみが閲覧できます。",
+                    color=discord.Color.green()
+                )
+                embed.add_field(name="ID", value=f"`{post_id}`", inline=True)
+                if category:
+                    embed.add_field(name="カテゴリ", value=f"`{category}`", inline=True)
+                
+                await interaction.followup.send(embed=embed, ephemeral=False)
+                
+                # データベースには通常のチャンネルIDを保存
+                channel = private_channel
+            
+            # メッセージ参照を保存
+            with post_cog._get_db_connection() as conn:
+                with post_cog._get_cursor(conn) as cursor:
+                    cursor.execute('''
+                        INSERT INTO message_references (
+                            channel_id, message_id, post_id
+                        ) VALUES (?, ?, ?)
+                    ''', (
+                        str(channel.id),
+                        str(sent_message.id),
+                        post_id
+                    ))
+                    conn.commit()
+            
+            # 公開投稿の場合のみ完了メッセージを送信（非公開は既に送信済み）
+            if is_public:
+                embed = discord.Embed(
+                    title="✅ 投稿が完了しました！",
+                    description=f"[メッセージにジャンプ]({sent_message.jump_url})",
+                    color=discord.Color.green()
+                )
+                embed.add_field(name="ID", value=f"`{post_id}`", inline=True)
+                if category:
+                    embed.add_field(name="カテゴリ", value=f"`{category}`", inline=True)
+                embed.add_field(name="表示名", value=f"`{'匿名' if is_anonymous else '表示'}`", inline=True)
+                
+                await interaction.followup.send(embed=embed, ephemeral=True)
+            
+        except Exception as e:
+            logger.error(f"投稿中にエラーが発生しました: {e}", exc_info=True)
+            await interaction.followup.send(
+                "❌ 投稿中にエラーが発生しました。しばらくしてからもう一度お試しください。",
+                ephemeral=True
+            )
+
 class Post(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
