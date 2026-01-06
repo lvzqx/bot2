@@ -20,7 +20,7 @@ class Delete(commands.Cog):
     @contextmanager
     def _get_db_connection(self) -> sqlite3.Connection:
         """データベース接続を取得するコンテキストマネージャ"""
-        conn = sqlite3.connect(self.bot.db_path)
+        conn = sqlite3.connect('thoughts.db')
         conn.row_factory = sqlite3.Row
         try:
             yield conn
