@@ -148,16 +148,16 @@ class Post(commands.Cog):
                         icon_url=interaction.user.display_avatar.url
                     )
                 
+                # 画像を追加（ある場合）
+                if image_url:
+                    embed.set_image(url=image_url)
+                
                 # カテゴリを追加（ある場合）
                 if category:
                     embed.add_field(name="📁 カテゴリ", value=category, inline=False)
                 
                 # 投稿IDを追加
                 embed.add_field(name="📝 投稿ID", value=f"`{post_id}`", inline=False)
-                
-                # 画像を追加（ある場合）
-                if image_url:
-                    embed.set_image(url=image_url)
                 
                 # メッセージを送信
                 if is_public:
@@ -435,16 +435,16 @@ class Post(commands.Cog):
                     else:
                         embed.set_author(name=str(interaction.user), icon_url=interaction.user.display_avatar.url)
                     
+                    # 画像を追加（ある場合）
+                    if image_url:
+                        embed.set_image(url=image_url)
+
                     # カテゴリを追加
                     if category:
                         embed.add_field(name="カテゴリ", value=category, inline=True)
                     
                     # 投稿IDを追加
                     embed.add_field(name="投稿ID", value=f"`{post_id}`", inline=True)
-                    
-                    # 画像を追加（ある場合）
-                    if image_url:
-                        embed.set_image(url=image_url)
                     
                     # メッセージを送信
                     sent_message = await channel.send(embed=embed)
@@ -466,32 +466,20 @@ class Post(commands.Cog):
                     else:
                         embed.set_author(name=str(interaction.user), icon_url=interaction.user.display_avatar.url)
                     
+                    # 画像を追加（ある場合）
+                    if image_url:
+                        embed.set_image(url=image_url)
+
                     # カテゴリを追加
                     if category:
                         embed.add_field(name="カテゴリ", value=category, inline=True)
                     
                     # 投稿IDを追加
                     embed.add_field(name="投稿ID", value=f"`{post_id}`", inline=True)
-                    
-                    # 画像を追加（ある場合）
-                    if image_url:
-                        embed.set_image(url=image_url)
-                    
-                    # 非公開チャンネルに送信
+
+                    # メッセージを送信
                     sent_message = await private_channel.send(embed=embed)
-                    
-                    # 投稿者には通常の完了メッセージを送信
-                    embed = discord.Embed(
-                        title="✅ 非公開で投稿が完了しました！",
-                        description=f"この投稿は管理者のみが閲覧できます。",
-                        color=discord.Color.green()
-                    )
-                    embed.add_field(name="ID", value=f"`{post_id}`", inline=True)
-                    if category:
-                        embed.add_field(name="カテゴリ", value=f"`{category}`", inline=True)
-                    
-                    await interaction.followup.send(embed=embed, ephemeral=False)
-                    
+
                     # データベースには通常のチャンネルIDを保存
                     channel = private_channel
                 
