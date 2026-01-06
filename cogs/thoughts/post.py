@@ -176,19 +176,40 @@ class PostModal(ui.Modal, title='新規投稿'):
                     # 投稿者をスレッドに追加
                     await thread.add_user(interaction.user)
                     
-                    # 「非公開」ロールを検索
+                    # 「非公開」ロールを検索または作成
                     private_role = discord.utils.get(interaction.guild.roles, name="非公開")
-                    if private_role:
-                        # ロールを持つメンバーをスレッドに追加
-                        for member in private_role.members:
-                            if member != interaction.user:  # 投稿者は既に追加済み
-                                try:
-                                    await thread.add_user(member)
-                                    logger.info(f"ユーザー {member} をスレッドに追加しました")
-                                except Exception as e:
-                                    logger.warning(f"ユーザー {member} をスレッドに追加できませんでした: {e}")
-                    else:
-                        logger.warning("「非公開」ロールが見つかりませんでした")
+                    if not private_role:
+                        # ロールが存在しない場合は作成
+                        try:
+                            private_role = await interaction.guild.create_role(
+                                name="非公開",
+                                reason="非公開投稿用のロールを作成"
+                            )
+                            logger.info(f"「非公開」ロールを作成しました: {private_role.id}")
+                        except Exception as e:
+                            logger.error(f"「非公開」ロールの作成に失敗しました: {e}")
+                            await interaction.followup.send(
+                                "❌ 非公開ロールの作成に失敗しました。管理者に連絡してください。",
+                                ephemeral=True
+                            )
+                            return
+                    
+                    # 投稿者に「非公開」ロールを付与
+                    try:
+                        member = interaction.guild.get_member(interaction.user.id)
+                        if member and private_role not in member.roles:
+                            await member.add_roles(private_role, reason="非公開投稿のため")
+                            logger.info(f"ユーザー {member} に「非公開」ロールを付与しました")
+                    except Exception as e:
+                        logger.error(f"ユーザーに「非公開」ロールを付与できませんでした: {e}")
+                    
+                    # ロールを持つメンバーをスレッドに追加
+                    for member in private_role.members:
+                        try:
+                            await thread.add_user(member)
+                            logger.info(f"ユーザー {member} をスレッドに追加しました")
+                        except Exception as e:
+                            logger.warning(f"ユーザー {member} をスレッドに追加できませんでした: {e}")
                     
                 except Exception as e:
                     logger.error(f"スレッド作成中にエラーが発生しました: {e}")

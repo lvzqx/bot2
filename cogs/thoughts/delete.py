@@ -42,9 +42,11 @@ class Delete(commands.Cog):
 
     async def _get_message_data(self, message_id: str) -> Optional[dict]:
         """メッセージIDからメッセージデータを取得します"""
+        logger.info(f"メッセージデータを取得中: message_id={message_id}")
         try:
             with self._get_db_connection() as conn:
                 with self._get_cursor(conn) as cursor:
+                    # データベース内のメッセージ参照を確認
                     cursor.execute('''
                         SELECT 
                             mr.post_id, 
@@ -57,8 +59,16 @@ class Delete(commands.Cog):
                         WHERE mr.message_id = ?
                     ''', (message_id,))
                     
-                    if row := cursor.fetchone():
+                    row = cursor.fetchone()
+                    if row:
+                        logger.info(f"メッセージデータを取得しました: {dict(row)}")
                         return dict(row)
+                    
+                    # デバッグ用: データベース内の全メッセージIDをログに出力
+                    cursor.execute('SELECT message_id FROM message_references LIMIT 10')
+                    sample_message_ids = [r[0] for r in cursor.fetchall()]
+                    logger.info(f"データベース内のサンプルメッセージID: {sample_message_ids}")
+                    
                     return None
         except sqlite3.Error as e:
             logger.error(f"メッセージデータの取得中にエラーが発生しました: {e}")
