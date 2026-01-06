@@ -3,11 +3,11 @@ from __future__ import annotations
 import logging
 import sqlite3
 from contextlib import contextmanager
+from typing import List, Dict, Any, Optional, Tuple, Union
 from datetime import datetime
-from typing import Any, Dict, Iterator, List, Optional, Tuple, Union, cast, TypedDict
 
 import discord
-from discord import app_commands, ui, Embed, ButtonStyle, Interaction, Message
+from discord import app_commands, ui, Interaction, Embed, File
 from discord.ext import commands
 
 # ロガーの設定
@@ -18,46 +18,19 @@ MAX_SEARCH_RESULTS = 50  # 最大検索結果数
 ITEMS_PER_PAGE = 3  # 1ページあたりの表示数
 
 # 型定義
-class PostData(TypedDict):
-    """投稿データの型定義"""
-    id: int
-    content: str
-    category: Optional[str]
-    created_at: str
-    display_name: Optional[str]
-    user_id: int
-    is_anonymous: bool
-    is_private: bool
-    image_url: Optional[str]
-    attachments: List[str]
-    attachment_urls: Optional[str]  # データベースから取得した生の添付URL（|区切り）
+PostData = Dict[str, Any]  # 投稿データの型
 
 class Search(commands.Cog):
-    """投稿検索機能を提供するCog
-    
-    Attributes:
-        bot: Discord Bot インスタンス
-    """
+    """投稿検索機能を提供するCog"""
     
     def __init__(self, bot: commands.Bot) -> None:
-        """Search Cog を初期化します。
-        
-        Args:
-            bot: Discord Bot インスタンス
-        """
+        """Search Cog を初期化します。"""
         self.bot: commands.Bot = bot
         logger.info("Search cog が初期化されました")
     
     @contextmanager
     def _get_db_connection(self) -> Iterator[sqlite3.Connection]:
-        """データベース接続を取得するコンテキストマネージャー
-        
-        Yields:
-            sqlite3.Connection: データベース接続オブジェクト
-            
-        Raises:
-            sqlite3.Error: データベース接続に失敗した場合
-        """
+        """データベース接続を取得するコンテキストマネージャー"""
         conn = None
         try:
             conn = sqlite3.connect('thoughts.db')
@@ -74,24 +47,17 @@ class Search(commands.Cog):
         finally:
             if conn:
                 conn.close()
-            
+    
     @contextmanager
     def _get_cursor(self, conn: sqlite3.Connection) -> Iterator[sqlite3.Cursor]:
-        """データベースカーソルを取得するコンテキストマネージャー
-        
-        Args:
-            conn: データベース接続オブジェクト
-            
-        Yields:
-            sqlite3.Cursor: データベースカーソル
-        """
+        """データベースカーソルを取得するコンテキストマネージャー"""
         cursor = conn.cursor()
         try:
             yield cursor
         finally:
             cursor.close()
 
-    async def _search_posts(
+    def _search_posts(
         self,
         keyword: Optional[str] = None,
         category: Optional[str] = None,
@@ -99,21 +65,7 @@ class Search(commands.Cog):
         user_id: Optional[str] = None,
         current_user_id: Optional[int] = None
     ) -> List[PostData]:
-        """データベースから投稿を検索します。
-        
-        Args:
-            keyword: 検索キーワード（部分一致）
-            category: カテゴリー名（完全一致）
-            limit: 取得する最大件数
-            user_id: ユーザーID（任意）
-            current_user_id: 現在のユーザーID（プライベート投稿の確認用）
-            
-        Returns:
-            List[PostData]: 検索結果の投稿リスト
-            
-        Raises:
-            sqlite3.Error: データベースエラーが発生した場合
-        """
+        """データベースから投稿を検索します。"""
         try:
             with self._get_db_connection() as conn:
                 with self._get_cursor(conn) as cursor:
@@ -143,17 +95,13 @@ class Search(commands.Cog):
                         params.append(int(user_id))
                     
                     # プライベート投稿は投稿者本人のみ表示
-                    if current_user_id:
+                    if current_user_id is not None:
                         query += " AND (t.is_private = 0 OR t.user_id = ?)"
                         params.append(current_user_id)
                     
                     # ソートとリミット
                     query += " ORDER BY t.created_at DESC LIMIT ?"
                     params.append(limit)
-                    
-                    # デバッグログ
-                    logger.info(f"SQLクエリ: {query}")
-                    logger.info(f"パラメータ: {params}")
                     
                     # クエリ実行
                     cursor.execute(query, params)
@@ -162,45 +110,18 @@ class Search(commands.Cog):
                     columns = [column[0] for column in cursor.description]
                     rows = cursor.fetchall()
                     
-                    # PostData 形式に変換
-                    posts: List[PostData] = []
-                    for row in rows:
-                        post = dict(zip(columns, row))
-                        
-                        posts.append({
-                            'id': post['id'],
-                            'content': post['content'],
-                            'category': post['category'],
-                            'created_at': post['created_at'],
-                            'display_name': post['display_name'],
-                            'user_id': post['user_id'],
-                            'is_anonymous': bool(post['is_anonymous']),
-                            'is_private': bool(post['is_private']),
-                            'image_url': post.get('image_url'),
-                            'attachments': [],
-                            'attachment_urls': None
-                        })
-                    
-                    return posts
+                    return [dict(zip(columns, row)) for row in rows]
                     
         except sqlite3.Error as e:
             logger.error(f"投稿の検索中にエラーが発生しました: {e}", exc_info=True)
             raise
-    
+
     async def _create_embeds(
         self, 
         interaction: discord.Interaction,
         posts: List[PostData]
     ) -> List[discord.Embed]:
-        """検索結果から埋め込みメッセージのリストを作成します。
-        
-        Args:
-            interaction: Discord インタラクションオブジェクト
-            posts: 投稿データのリスト
-            
-        Returns:
-            List[discord.Embed]: 埋め込みメッセージのリスト
-        """
+        """検索結果から埋め込みメッセージのリストを作成します。"""
         embeds: List[discord.Embed] = []
         
         # 1ページあたりの投稿数
@@ -254,7 +175,7 @@ class Search(commands.Cog):
             embeds.append(embed)
         
         return embeds
-    
+
     @app_commands.command(name="search", description="投稿を検索します")
     @app_commands.describe(
         keyword="検索キーワード",
@@ -270,18 +191,7 @@ class Search(commands.Cog):
         limit: int = 10,
         user_id: Optional[str] = None
     ) -> None:
-        """投稿を検索します
-        
-        Args:
-            interaction: Discordのインタラクションオブジェクト
-            keyword: 検索キーワード（部分一致）
-            category: カテゴリー名（完全一致）
-            limit: 表示する件数（1-50）
-            user_id: ユーザーID（任意）
-            
-        Raises:
-            Exception: 予期せぬエラーが発生した場合
-        """
+        """投稿を検索します"""
         # DMの場合は無効化
         if isinstance(interaction.channel, discord.DMChannel):
             await interaction.response.send_message(
@@ -300,22 +210,15 @@ class Search(commands.Cog):
             f"keyword={keyword}, category={category}, limit={limit}, target_user={user_id}"
         )
         
-        # タイムアウト対策：早めに処理開始をログ
-        start_time = datetime.now()
-        
         try:
             # 投稿を検索
-            posts = await self._search_posts(
+            posts = self._search_posts(
                 keyword=keyword,
                 category=category,
                 limit=limit,
                 user_id=user_id,
                 current_user_id=interaction.user.id
             )
-            
-            # 処理時間をログ
-            search_time = (datetime.now() - start_time).total_seconds()
-            logger.info(f"検索完了: {len(posts)}件, {search_time:.2f}秒")
             
             if not posts:
                 await interaction.followup.send(
@@ -342,6 +245,90 @@ class Search(commands.Cog):
                 "❌ 検索中にエラーが発生しました。しばらくしてからもう一度お試しください。",
                 ephemeral=True
             )
+
+class PaginationView(discord.ui.View):
+    def __init__(self, pages, current_page, user_id):
+        super().__init__(timeout=300)  # 5分に延長
+        self.pages = pages
+        self.current_page = current_page
+        self.user_id = user_id
+        self.message = None
+        self.update_buttons()
+    
+    def update_buttons(self):
+        # すべてのボタンをクリア
+        self.clear_items()
+        
+        # ボタンのスタイルを定義
+        first_disabled = self.current_page == 0
+        last_disabled = self.current_page >= len(self.pages) - 1
+        
+        # ボタンを追加
+        buttons = [
+            ('<<', 'first', first_disabled, discord.ButtonStyle.secondary),
+            ('<', 'prev', first_disabled, discord.ButtonStyle.primary),
+            (f'{self.current_page + 1}/{len(self.pages)}', 'page', True, discord.ButtonStyle.gray),
+            ('>', 'next', last_disabled, discord.ButtonStyle.primary),
+            ('>>', 'last', last_disabled, discord.ButtonStyle.secondary)
+        ]
+        
+        for label, custom_id, disabled, style in buttons:
+            button = discord.ui.Button(
+                style=style,
+                label=label,
+                custom_id=custom_id,
+                disabled=disabled
+            )
+            button.callback = self.button_callback
+            self.add_item(button)
+    
+    async def button_callback(self, interaction: discord.Interaction):
+        # ボタンを押したユーザーを確認
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("この操作は許可されていません。", ephemeral=True)
+            return
+            
+        # ボタンIDに応じてページを更新
+        custom_id = interaction.data['custom_id']
+        
+        try:
+            if custom_id == 'first':
+                self.current_page = 0
+            elif custom_id == 'prev' and self.current_page > 0:
+                self.current_page -= 1
+            elif custom_id == 'next' and self.current_page < len(self.pages) - 1:
+                self.current_page += 1
+            elif custom_id == 'last':
+                self.current_page = len(self.pages) - 1
+            
+            # ボタンの状態を更新
+            self.update_buttons()
+            
+            # メッセージを編集
+            await interaction.response.edit_message(
+                embed=self.pages[self.current_page],
+                view=self
+            )
+            
+        except Exception as e:
+            print(f"[ERROR] ページネーション処理中にエラーが発生しました: {e}")
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    "ページの更新中にエラーが発生しました。",
+                    ephemeral=True
+                )
+    
+    async def on_timeout(self):
+        # タイムアウト時にボタンを無効化
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+        
+        if self.message:
+            try:
+                await self.message.edit(view=self)
+            except:
+                pass
 
 async def setup(bot: commands.Bot) -> None:
     """Cogをボットに追加"""
