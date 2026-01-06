@@ -138,7 +138,7 @@ class Search(commands.Cog):
                         query += " AND t.category = ?"
                         params.append(category)
                     
-                    if user_id:
+                    if user_id and user_id.isdigit():
                         query += " AND t.user_id = ?"
                         params.append(int(user_id))
                     
