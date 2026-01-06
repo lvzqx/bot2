@@ -29,14 +29,36 @@ class Post(commands.Cog):
         """新しい投稿を作成します"""
         try:
             logger.info(f"post コマンドが呼び出されました。ユーザー: {interaction.user}")
-            modal = PostModal()  # モーダルインスタンスを作成
-            await interaction.response.send_modal(modal)  # モーダルを表示
-            logger.info("モーダルを表示しました")
+            
+            # モーダルのインスタンスを作成
+            try:
+                modal = PostModal()
+                logger.info("モーダルのインスタンス化に成功しました")
+            except Exception as e:
+                logger.error(f"モーダルのインスタンス化に失敗しました: {e}", exc_info=True)
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(
+                        f"エラー: モーダルの作成に失敗しました。\n```{str(e)}```",
+                        ephemeral=True
+                    )
+                return
+            
+            # モーダルを表示
+            try:
+                await interaction.response.send_modal(modal)
+                logger.info("モーダルを表示しました")
+            except Exception as e:
+                logger.error(f"モーダルの表示中にエラーが発生しました: {e}", exc_info=True)
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(
+                        f"エラー: モーダルの表示に失敗しました。\n```{str(e)}```",
+                        ephemeral=True
+                    )
         except Exception as e:
-            logger.error(f"モーダル表示中にエラーが発生しました: {e}")
+            logger.error(f"予期しないエラーが発生しました: {e}", exc_info=True)
             if not interaction.response.is_done():
                 await interaction.response.send_message(
-                    "エラーが発生しました。もう一度お試しください。",
+                    f"予期しないエラーが発生しました: {str(e)}",
                     ephemeral=True
                 )
 
