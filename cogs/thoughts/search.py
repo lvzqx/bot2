@@ -94,10 +94,8 @@ class Search(commands.Cog):
                         query += " AND t.user_id = ?"
                         params.append(int(user_id))
                     
-                    # プライベート投稿は投稿者本人のみ表示
-                    if current_user_id is not None:
-                        query += " AND (t.is_private = 0 OR t.user_id = ?)"
-                        params.append(current_user_id)
+                    # 公開投稿のみ表示（プライベート投稿は非表示）
+                    query += " AND t.is_private = 0"
                     
                     # ソートとリミット
                     query += " ORDER BY t.created_at DESC LIMIT ?"

@@ -141,7 +141,7 @@ class Edit(commands.Cog):
             self._is_private: bool = current_is_private
             
             # コンポーネントの作成
-            self.content_input = ui.TextInput(
+            self.content = self.content_input = ui.TextInput(
                 label="投稿内容",
                 style=discord.TextStyle.paragraph,
                 placeholder="投稿内容を入力してください...",
@@ -150,7 +150,7 @@ class Edit(commands.Cog):
                 required=True
             )
             
-            self.category_input = ui.TextInput(
+            self.category = self.category_input = ui.TextInput(
                 label="カテゴリー（任意）",
                 style=discord.TextStyle.short,
                 placeholder="例: 日記, 質問, 雑談 など",
@@ -159,7 +159,7 @@ class Edit(commands.Cog):
                 required=False
             )
             
-            self.image_url_input = ui.TextInput(
+            self.image_url = self.image_url_input = ui.TextInput(
                 label="画像URL（任意）",
                 style=discord.TextStyle.short,
                 placeholder="https://example.com/image.jpg",
@@ -176,7 +176,7 @@ class Edit(commands.Cog):
             self.toggle_view = ui.View(timeout=None)
             
             # 匿名トグルボタン
-            self.anonymous_button = ui.Button(
+            self.is_anonymous = self.anonymous_button = ui.Button(
                 style=discord.ButtonStyle.secondary,
                 label=f"匿名: {'ON' if current_is_anonymous else 'OFF'}",
                 custom_id=f"edit_anonymous_{post_id}"
@@ -185,7 +185,7 @@ class Edit(commands.Cog):
             self.toggle_view.add_item(self.anonymous_button)
             
             # 非公開トグルボタン
-            self.private_button = ui.Button(
+            self.is_private = self.private_button = ui.Button(
                 style=discord.ButtonStyle.secondary,
                 label=f"非公開: {'ON' if current_is_private else 'OFF'}",
                 custom_id=f"edit_private_{post_id}"
@@ -372,28 +372,28 @@ class Edit(commands.Cog):
                     (is_valid, error_message, content, category, is_anonymous, is_private, image_url)
             """
             # 内容のバリデーション
-            content = self.content.value.strip()
+            content = self.content_input.value.strip()
             if not content:
                 return False, "❌ 内容を入力してください。", None, None, None, None, None
             
             # カテゴリーのバリデーション
-            category = self.category.value.strip()
+            category = self.category_input.value.strip()
             if not category:
                 return False, "❌ カテゴリーを入力してください。", None, None, None, None, None
             
             # 表示名のバリデーション
-            display_option = self.is_anonymous.value.strip()
+            display_option = self.is_anonymous_input.value.strip()
             if display_option not in ['表示', '匿名']:
                 return False, "❌ 表示名は「表示」または「匿名」で入力してください。", None, None, None, None, None
             
             # 公開設定のバリデーション
-            privacy_option = self.is_private.value.strip()
+            privacy_option = self.is_private_input.value.strip()
             if privacy_option not in ['公開', '非公開']:
                 return False, "❌ 公開設定は「公開」または「非公開」で入力してください。", None, None, None, None, None
             
             is_anonymous = display_option == '匿名'
             is_private = privacy_option == '非公開'
-            image_url = self.image_url.value.strip() or None
+            image_url = self.image_url_input.value.strip() or None
             
             return True, None, content, category, is_anonymous, is_private, image_url
         
