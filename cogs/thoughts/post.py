@@ -152,12 +152,11 @@ class Post(commands.Cog):
                 if image_url:
                     embed.set_image(url=image_url)
                 
-                # カテゴリを追加（ある場合）
+                footer_parts = []
                 if category:
-                    embed.add_field(name="📁 カテゴリ", value=category, inline=False)
-                
-                # 投稿IDを追加
-                embed.add_field(name="📝 投稿ID", value=f"`{post_id}`", inline=False)
+                    footer_parts.append(f"カテゴリ: {category}")
+                footer_parts.append(f"投稿ID: {post_id}")
+                embed.set_footer(text=" | ".join(footer_parts))
                 
                 # メッセージを送信
                 if is_public:
@@ -439,12 +438,11 @@ class Post(commands.Cog):
                     if image_url:
                         embed.set_image(url=image_url)
 
-                    # カテゴリを追加
+                    footer_parts = []
                     if category:
-                        embed.add_field(name="カテゴリ", value=category, inline=True)
-                    
-                    # 投稿IDを追加
-                    embed.add_field(name="投稿ID", value=f"`{post_id}`", inline=True)
+                        footer_parts.append(f"カテゴリ: {category}")
+                    footer_parts.append(f"投稿ID: {post_id}")
+                    embed.set_footer(text=" | ".join(footer_parts))
                     
                     # メッセージを送信
                     sent_message = await channel.send(embed=embed)
@@ -470,12 +468,11 @@ class Post(commands.Cog):
                     if image_url:
                         embed.set_image(url=image_url)
 
-                    # カテゴリを追加
+                    footer_parts = []
                     if category:
-                        embed.add_field(name="カテゴリ", value=category, inline=True)
-                    
-                    # 投稿IDを追加
-                    embed.add_field(name="投稿ID", value=f"`{post_id}`", inline=True)
+                        footer_parts.append(f"カテゴリ: {category}")
+                    footer_parts.append(f"投稿ID: {post_id}")
+                    embed.set_footer(text=" | ".join(footer_parts))
 
                     # メッセージを送信
                     sent_message = await private_channel.send(embed=embed)
