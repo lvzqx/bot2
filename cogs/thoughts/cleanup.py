@@ -68,7 +68,7 @@ class Cleanup(commands.Cog):
         """
         conn = None
         try:
-            conn = sqlite3.connect(self.bot.db_path)
+            conn = sqlite3.connect('thoughts.db')
             conn.row_factory = sqlite3.Row
             yield conn
         except sqlite3.Error as e:
