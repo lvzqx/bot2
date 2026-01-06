@@ -355,8 +355,10 @@ class Edit(commands.Cog):
                         conn.commit()
                 
                 # Discordメッセージを更新（エラーが無視されるように）
+                print(f"[DEBUG] Discordメッセージ更新を開始します: post_id={self.post_id}")
                 try:
                     await self._update_discord_message(interaction, content, category, image_url)
+                    print(f"[DEBUG] Discordメッセージ更新が完了しました")
                 except Exception as e:
                     logger.warning(f"Discordメッセージの更新に失敗しましたが、データベースは更新されています: {e}")
                     print(f"[DEBUG] Discordメッセージ更新エラー: {e}")
