@@ -100,7 +100,17 @@ class Post(commands.Cog):
             message = self.message.value
             category = self.category.value if self.category.value else None
             image_url = self.image_url.value if self.image_url.value else None
-            is_public = self.visibility.value == '公開'
+            visibility_value = (self.visibility.value or "").strip().lower()
+            if visibility_value in {"公開", "public"}:
+                is_public = True
+            elif visibility_value in {"非公開", "private"}:
+                is_public = False
+            else:
+                await interaction.followup.send(
+                    "❌ 公開設定は「公開」または「非公開」と入力してください。",
+                    ephemeral=True
+                )
+                return
             is_anonymous = self.anonymous.value and self.anonymous.value.lower() == '匿名'
             
             # データベースに保存
@@ -169,11 +179,26 @@ class Post(commands.Cog):
                         thread_name += f" - {category}"
                     
                     # スレッドを作成
-                    thread = await channel.create_thread(
-                        name=thread_name[:100],
-                        type=discord.ChannelType.private_thread,
-                        reason=f"非公開投稿のスレッド作成 - {interaction.user.id}"
-                    )
+                    try:
+                        thread = await channel.create_thread(
+                            name=thread_name[:100],
+                            type=discord.ChannelType.private_thread,
+                            reason=f"非公開投稿のスレッド作成 - {interaction.user.id}",
+                            invitable=False
+                        )
+                    except discord.Forbidden:
+                        await interaction.followup.send(
+                            "❌ 非公開スレッドを作成する権限がありません。（botにスレッド作成/管理権限が必要です）",
+                            ephemeral=True
+                        )
+                        return
+                    except discord.HTTPException as e:
+                        logger.error(f"スレッド作成に失敗しました: {e}", exc_info=True)
+                        await interaction.followup.send(
+                            "❌ 非公開スレッドの作成に失敗しました。",
+                            ephemeral=True
+                        )
+                        return
                     
                     # 投稿者をスレッドに追加
                     await thread.add_user(interaction.user)
@@ -393,7 +418,17 @@ class Post(commands.Cog):
             message = self.message.value
             category = self.category.value if self.category.value else None
             image_url = self.image_url.value if self.image_url.value else None
-            is_public = self.visibility.value == '公開'
+            visibility_value = (self.visibility.value or "").strip().lower()
+            if visibility_value in {"公開", "public"}:
+                is_public = True
+            elif visibility_value in {"非公開", "private"}:
+                is_public = False
+            else:
+                await interaction.followup.send(
+                    "❌ 公開設定は「公開」または「非公開」と入力してください。",
+                    ephemeral=True
+                )
+                return
             is_anonymous = self.anonymous.value.lower() == '匿名'
             
             # データベースに保存
@@ -452,19 +487,64 @@ class Post(commands.Cog):
                     if not private_channel:
                         raise ValueError("非公開用の投稿チャンネルが見つかりません")
                     
-                    # 非公開チャンネルに投稿
+                    # 非公開投稿の場合はプライベートスレッドを作成
+                    thread_name = f"非公開投稿 - {interaction.user.name}"
+                    if category:
+                        thread_name += f" - {category}"
+                    
+                    try:
+                        thread = await private_channel.create_thread(
+                            name=thread_name[:100],
+                            type=discord.ChannelType.private_thread,
+                            reason=f"非公開投稿のスレッド作成 - {interaction.user.id}",
+                            invitable=False
+                        )
+                    except discord.Forbidden:
+                        await interaction.followup.send(
+                            "❌ 非公開スレッドを作成する権限がありません。（botにスレッド作成/管理権限が必要です）",
+                            ephemeral=True
+                        )
+                        return
+                    except discord.HTTPException as e:
+                        logger.error(f"スレッド作成に失敗しました: {e}", exc_info=True)
+                        await interaction.followup.send(
+                            "❌ 非公開スレッドの作成に失敗しました。",
+                            ephemeral=True
+                        )
+                        return
+                    
+                    await thread.add_user(interaction.user)
+
+                    # 「非公開」ロールを取得または作成
+                    private_role = discord.utils.get(interaction.guild.roles, name="非公開")
+                    if not private_role:
+                        private_role = await interaction.guild.create_role(
+                            name="非公開",
+                            reason="非公開投稿用のロールを作成"
+                        )
+
+                    # 投稿者に「非公開」ロールを付与
+                    member = interaction.guild.get_member(interaction.user.id)
+                    if member and private_role not in member.roles:
+                        await member.add_roles(private_role, reason="非公開投稿のため")
+
+                    # 「非公開」ロール保持者をスレッドに追加
+                    for role_member in private_role.members:
+                        try:
+                            await thread.add_user(role_member)
+                        except discord.HTTPException:
+                            pass
+                    
                     embed = discord.Embed(
                         description=message,
                         color=discord.Color.dark_grey()
                     )
                     
-                    # 投稿者情報を追加（匿名設定に応じて表示を変更）
                     if is_anonymous:
                         embed.set_author(name="匿名ユーザー", icon_url=DEFAULT_AVATAR)
                     else:
                         embed.set_author(name=str(interaction.user), icon_url=interaction.user.display_avatar.url)
                     
-                    # 画像を追加（ある場合）
                     if image_url:
                         embed.set_image(url=image_url)
 
@@ -473,12 +553,11 @@ class Post(commands.Cog):
                         footer_parts.append(f"カテゴリ: {category}")
                     footer_parts.append(f"投稿ID: {post_id}")
                     embed.set_footer(text=" | ".join(footer_parts))
-
-                    # メッセージを送信
-                    sent_message = await private_channel.send(embed=embed)
-
-                    # データベースには通常のチャンネルIDを保存
-                    channel = private_channel
+                    
+                    sent_message = await thread.send(embed=embed)
+                    
+                    # DBにはスレッドIDを保存
+                    channel = thread
                 
                 # メッセージ参照を保存
                 with post_cog._get_db_connection() as conn:
