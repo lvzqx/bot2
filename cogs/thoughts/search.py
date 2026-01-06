@@ -60,25 +60,20 @@ class Search(commands.Cog):
         """
         conn = None
         try:
-            # Post コグからデータベース接続を取得
-            post_cog = self.bot.get_cog('Post')
-            if not post_cog or not hasattr(post_cog, '_get_db_connection'):
-                logger.error("Post コグが見つからないか、データベースにアクセスできません")
-                raise sqlite3.Error("データベースに接続できません")
-                
-            with post_cog._get_db_connection() as conn:
-                # PRAGMA 設定を適用
-                conn.execute("PRAGMA foreign_keys = ON")
-                conn.execute("PRAGMA journal_mode = WAL")
-                conn.execute("PRAGMA synchronous = NORMAL")
-                conn.execute("PRAGMA cache_size = -2000000")  # 2GB
-                conn.execute("PRAGMA temp_store = MEMORY")
-                conn.row_factory = sqlite3.Row
-                yield conn
-                
+            conn = sqlite3.connect('thoughts.db')
+            conn.execute("PRAGMA foreign_keys = ON")
+            conn.execute("PRAGMA journal_mode = WAL")
+            conn.execute("PRAGMA synchronous = NORMAL")
+            conn.execute("PRAGMA cache_size = -2000000")  # 2GB
+            conn.execute("PRAGMA temp_store = MEMORY")
+            conn.row_factory = sqlite3.Row
+            yield conn
         except sqlite3.Error as e:
             logger.error(f"データベース接続エラー: {e}", exc_info=True)
             raise
+        finally:
+            if conn:
+                conn.close()
             
     @contextmanager
     def _get_cursor(self, conn: sqlite3.Connection) -> Iterator[sqlite3.Cursor]:
