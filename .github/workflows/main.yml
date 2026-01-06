@@ -136,6 +136,9 @@ jobs:
         # データベースをコピー
         cp thoughts.db ./
         
+        # Jekyll を無効化
+        echo "" > .nojekyll
+        
         # index.html を作成（GitHub Pages の要件）
         echo "<html><body><h1>Discord Bot Database</h1></body></html>" > index.html
         
