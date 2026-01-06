@@ -42,11 +42,11 @@ class Delete(commands.Cog):
 
     async def _get_message_data(self, message_id: str) -> Optional[dict]:
         """メッセージIDからメッセージデータを取得します"""
-        logger.info(f"メッセージデータを取得中: message_id={message_id}")
+        logger.info(f"メッセージデータを取得中: message_id={message_id} (型: {type(message_id)})")
         try:
             with self._get_db_connection() as conn:
                 with self._get_cursor(conn) as cursor:
-                    # データベース内のメッセージ参照を確認
+                    # データベース内のメッセージ参照を確認（文字列として比較）
                     cursor.execute('''
                         SELECT 
                             mr.post_id, 
@@ -56,18 +56,41 @@ class Delete(commands.Cog):
                             t.is_public
                         FROM message_references mr
                         JOIN thoughts t ON mr.post_id = t.id
-                        WHERE mr.message_id = ?
-                    ''', (message_id,))
+                        WHERE CAST(mr.message_id AS TEXT) = ?
+                    ''', (str(message_id),))
                     
                     row = cursor.fetchone()
                     if row:
-                        logger.info(f"メッセージデータを取得しました: {dict(row)}")
-                        return dict(row)
+                        result = dict(row)
+                        logger.info(f"メッセージデータを取得しました: {result}")
+                        return result
                     
                     # デバッグ用: データベース内の全メッセージIDをログに出力
-                    cursor.execute('SELECT message_id FROM message_references LIMIT 10')
-                    sample_message_ids = [r[0] for r in cursor.fetchall()]
-                    logger.info(f"データベース内のサンプルメッセージID: {sample_message_ids}")
+                    cursor.execute('SELECT message_id, post_id, channel_id FROM message_references LIMIT 10')
+                    sample_messages = [dict(r) for r in cursor.fetchall()]
+                    logger.info(f"データベース内のサンプルメッセージ: {sample_messages}")
+                    
+                    # 念のため、数値としても検索を試みる
+                    try:
+                        if message_id.isdigit():
+                            cursor.execute('''
+                                SELECT 
+                                    mr.post_id, 
+                                    mr.channel_id, 
+                                    mr.message_id, 
+                                    t.user_id,
+                                    t.is_public
+                                FROM message_references mr
+                                JOIN thoughts t ON mr.post_id = t.id
+                                WHERE mr.message_id = ?
+                            ''', (int(message_id),))
+                            
+                            if row := cursor.fetchone():
+                                result = dict(row)
+                                logger.info(f"数値として検索してメッセージデータを取得しました: {result}")
+                                return result
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"数値としての検索に失敗しました: {e}")
                     
                     return None
         except sqlite3.Error as e:
