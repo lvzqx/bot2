@@ -29,6 +29,10 @@ class Help(commands.Cog):
             # コマンド一覧を追加
             commands_list = []
             for cmd in self.bot.tree.get_commands():
+                # helpコマンド自体は表示しない
+                if cmd.name == "help":
+                    continue
+                    
                 # コマンドがグループの場合はサブコマンドも表示
                 if hasattr(cmd, 'commands'):
                     sub_commands = [f"`/{cmd.name} {sub.name}` - {sub.description}" 
