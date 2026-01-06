@@ -17,7 +17,7 @@ class Help(commands.Cog):
         
     @app_commands.command(name="help")
     async def help_command(self, interaction: discord.Interaction):
-        """利用可能なコマンドを表示します"""
+        """利用可能なコマンドを表示します"""""
         try:
             # 埋め込みメッセージを作成
             embed = discord.Embed(
