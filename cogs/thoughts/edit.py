@@ -410,6 +410,10 @@ class Edit(commands.Cog):
                         message_ref = cursor.fetchone()
                         if not message_ref:
                             logger.warning(f"Post {self.post_id} のメッセージ参照が見つかりません")
+                            logger.info(f"現在のメッセージ参照を確認します...")
+                            cursor.execute('SELECT post_id, message_id, channel_id FROM message_references LIMIT 5')
+                            refs = cursor.fetchall()
+                            logger.info(f"メッセージ参照一覧: {refs}")
                             return
                             
                         message_id, channel_id = message_ref
