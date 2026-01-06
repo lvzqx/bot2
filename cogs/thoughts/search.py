@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 from contextlib import contextmanager
-from typing import List, Dict, Any, Optional, Tuple, Union, Iterator
+from typing import List, Dict, Any, Optional, Tuple, Union
 from datetime import datetime
 
 import discord
@@ -33,29 +33,20 @@ class Search(commands.Cog):
         """データベース接続を取得するコンテキストマネージャー"""
         conn = None
         try:
-            logger.info("DB接続を開始")
             conn = sqlite3.connect('thoughts.db')
-            logger.info("DB接続成功")
             conn.execute("PRAGMA foreign_keys = ON")
             conn.execute("PRAGMA journal_mode = WAL")
             conn.execute("PRAGMA synchronous = NORMAL")
             conn.execute("PRAGMA cache_size = -2000000")  # 2GB
             conn.execute("PRAGMA temp_store = MEMORY")
             conn.row_factory = sqlite3.Row
-            logger.info("PRAGMA設定完了")
             yield conn
         except sqlite3.Error as e:
             logger.error(f"データベース接続エラー: {e}", exc_info=True)
-            logger.error(f"エラー詳細: {type(e).__name__}: {str(e)}")
-            raise
-        except Exception as e:
-            logger.error(f"予期せぬエラー: {e}", exc_info=True)
-            logger.error(f"エラー詳細: {type(e).__name__}: {str(e)}")
             raise
         finally:
             if conn:
                 conn.close()
-                logger.info("DB接続を閉じました")
     
     @contextmanager
     def _get_cursor(self, conn: sqlite3.Connection) -> Iterator[sqlite3.Cursor]:
@@ -77,9 +68,7 @@ class Search(commands.Cog):
         """データベースから投稿を検索します。"""
         try:
             with self._get_db_connection() as conn:
-                logger.info("DB接続成功、カーソル取得")
                 with self._get_cursor(conn) as cursor:
-                    logger.info("カーソル取得成功")
                     # クエリの構築
                     query = """
                         SELECT 
@@ -115,15 +104,11 @@ class Search(commands.Cog):
                     params.append(limit)
                     
                     # クエリ実行
-                    logger.info(f"クエリ実行: {query}")
-                    logger.info(f"パラメータ: {params}")
                     cursor.execute(query, params)
-                    logger.info("クエリ実行成功")
                     
                     # 結果を辞書のリストに変換
                     columns = [column[0] for column in cursor.description]
                     rows = cursor.fetchall()
-                    logger.info(f"結果取得: {len(rows)}件")
                     
                     return [dict(zip(columns, row)) for row in rows]
                     
@@ -220,10 +205,6 @@ class Search(commands.Cog):
         
         # 処理中であることをユーザーに通知
         await interaction.response.defer(ephemeral=True)
-        logger.info(
-            f"検索を開始: user_id={interaction.user.id}, "
-            f"keyword={keyword}, category={category}, limit={limit}, target_user={user_id}"
-        )
         
         try:
             # 投稿を検索
@@ -246,7 +227,7 @@ class Search(commands.Cog):
             embeds = await self._create_embeds(interaction, posts)
             
             # ページネーションで表示
-            view = PaginationView(embeds, 0, timeout=300)  # 5分でタイムアウト
+            view = PaginationView(embeds, 0, interaction.user.id)
             await interaction.followup.send(
                 f"🔍 検索結果 ({len(posts)}件)",
                 embed=embeds[0], 
