@@ -36,7 +36,8 @@ class DatabaseMixin:
     """データベース操作のミックスインクラス"""
     
     def __init__(self):
-        self.db_path = 'thoughts.db'
+        # 環境変数からデータベースパスを取得、なければデフォルト値を使用
+        self.db_path = os.getenv('DB_PATH', 'thoughts.db')
         self._init_db()
     
     def _init_db(self):
