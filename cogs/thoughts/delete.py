@@ -134,26 +134,28 @@ class Delete(commands.Cog):
             return False, None
             
     async def _check_and_remove_private_role(self, guild: discord.Guild, user_id: int) -> None:
-        """ユーザーの非公開投稿がなくなった場合、非公開ロールを削除します"""
+        """ユーザーから非公開ロールを削除します"""
         try:
-            with self._get_db_connection() as conn:
-                with self._get_cursor(conn) as cursor:
-                    # ユーザーの非公開投稿が残っているか確認
-                    cursor.execute('''
-                        SELECT COUNT(*) as count 
-                        FROM thoughts 
-                        WHERE user_id = ? AND is_public = 0
-                    ''', (user_id,))
-                    remaining_posts = cursor.fetchone()['count']
-                    
-                    if remaining_posts == 0:
-                        # 非公開ロールを検索
-                        private_role = discord.utils.get(guild.roles, name="非公開")
-                        if private_role:
-                            member = guild.get_member(int(user_id))
-                            if member and private_role in member.roles:
+            # 非公開ロールを検索
+            private_role = discord.utils.get(guild.roles, name="非公開")
+            if private_role:
+                member = guild.get_member(int(user_id))
+                if member and private_role in member.roles:
+                    # ユーザーの非公開投稿を確認
+                    with self._get_db_connection() as conn:
+                        with self._get_cursor(conn) as cursor:
+                            cursor.execute('''
+                                SELECT COUNT(*) as count 
+                                FROM thoughts 
+                                WHERE user_id = ? AND is_public = 0
+                            ''', (user_id,))
+                            remaining_posts = cursor.fetchone()['count']
+                            
+                            if remaining_posts == 0:
                                 await member.remove_roles(private_role, reason="非公開投稿がなくなりました")
                                 logger.info(f"ユーザー {member} から非公開ロールを削除しました")
+                            else:
+                                logger.info(f"ユーザー {member} にはまだ {remaining_posts} 件の非公開投稿があります")
         except Exception as e:
             logger.error(f"非公開ロールの削除中にエラーが発生しました: {e}")
 
@@ -208,16 +210,31 @@ class Delete(commands.Cog):
             
             # メッセージを削除
             try:
-                channel = interaction.guild.get_channel_or_thread(int(message_data['channel_id']))
-                if not channel:
+                # チャンネルまたはスレッドを取得
+                try:
+                    channel = await interaction.guild.fetch_channel(int(message_data['channel_id']))
+                    logger.info(f"チャンネル/スレッドを取得しました: {channel} (type: {type(channel)})")
+                except discord.NotFound:
                     logger.warning(f"チャンネルが見つかりません: {message_data['channel_id']}")
+                    # データベースからは削除するため、処理を続行
+                    await interaction.followup.send(
+                        "✅ 投稿を削除しました。（メッセージは既に削除されているか、見つかりませんでした）",
+                        ephemeral=True
+                    )
+                    return
+                except discord.HTTPException as e:
+                    logger.error(f"チャンネルの取得中にエラーが発生しました: {e}")
+                    await interaction.followup.send(
+                        "❌ エラーが発生しました。しばらくしてからもう一度お試しください。",
+                        ephemeral=True
+                    )
                     return
                 
                 # スレッドの場合はスレッド全体を削除
                 if isinstance(channel, discord.Thread):
                     # 権限チェック
                     has_permission = (
-                        channel.owner_id == interaction.user.id or  # スレッドの作成者
+                        str(channel.owner_id) == str(interaction.user.id) or  # スレッドの作成者
                         interaction.user.guild_permissions.administrator or  # 管理者
                         interaction.user.guild_permissions.manage_threads  # スレッド管理権限
                     )
@@ -229,13 +246,15 @@ class Delete(commands.Cog):
                         )
                         return
                     
-                    # スレッドをアーカイブして削除
+                    # スレッドを削除
                     try:
-                        # スレッドをアーカイブ
-                        await channel.edit(archived=True, locked=True)
-                        # スレッドを削除
                         await channel.delete(reason=f"投稿削除 by {interaction.user}")
                         logger.info(f"スレッド {channel.id} を削除しました")
+                        await interaction.followup.send(
+                            "✅ 非公開スレッドを削除しました。",
+                            ephemeral=True
+                        )
+                        return
                     except discord.Forbidden:
                         logger.warning(f"スレッドの削除権限がありません: {channel.id}")
                         await interaction.followup.send(
@@ -245,27 +264,39 @@ class Delete(commands.Cog):
                         return
                     except discord.HTTPException as e:
                         logger.error(f"スレッドの削除中にエラーが発生しました: {e}")
-                        raise
-                else:
-                    # 通常のメッセージを削除
-                    try:
-                        message = await channel.fetch_message(int(message_data['message_id']))
-                        await message.delete()
-                        logger.info(f"メッセージ {message.id} を削除しました")
-                    except discord.NotFound:
-                        logger.warning(f"メッセージが見つかりません: {message_data['message_id']}")
-                    except discord.Forbidden:
-                        logger.warning(f"メッセージの削除権限がありません: {message_data['message_id']}")
                         await interaction.followup.send(
-                            "❌ メッセージを削除する権限がありません。",
+                            "❌ スレッドの削除中にエラーが発生しました。",
                             ephemeral=True
                         )
                         return
-            except discord.NotFound:
-                logger.warning(f"メッセージまたはチャンネルが見つかりませんでした: {message_data['message_id']}")
-            except discord.Forbidden:
-                logger.warning(f"メッセージの削除権限がありません: {message_data['message_id']}")
-            except discord.HTTPException as e:
+                
+                # 通常のメッセージを削除
+                try:
+                    message = await channel.fetch_message(int(message_data['message_id']))
+                    await message.delete()
+                    logger.info(f"メッセージ {message.id} を削除しました")
+                    await interaction.followup.send(
+                        "✅ 投稿を削除しました。",
+                        ephemeral=True
+                    )
+                except discord.NotFound:
+                    logger.warning(f"メッセージが見つかりません: {message_data['message_id']}")
+                    await interaction.followup.send(
+                        "✅ 投稿は既に削除されています。",
+                        ephemeral=True
+                    )
+                except discord.Forbidden:
+                    logger.warning(f"メッセージの削除権限がありません: {message_data['message_id']}")
+                    await interaction.followup.send(
+                        "❌ メッセージを削除する権限がありません。",
+                        ephemeral=True
+                    )
+            except Exception as e:
+                logger.error(f"投稿の削除中にエラーが発生しました: {e}")
+                await interaction.followup.send(
+                    "❌ 投稿の削除中にエラーが発生しました。",
+                    ephemeral=True
+                )
                 logger.warning(f"メッセージの削除中にエラーが発生しました: {e}")
             
             # 完了メッセージを送信
