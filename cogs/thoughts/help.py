@@ -40,19 +40,6 @@ class Help(commands.Cog):
                     inline=False
                 )
             
-            # 使い方の例を追加
-            embed.add_field(
-                name="💡 使い方の例",
-                value="""
-                `/post` - 新しい投稿を作成します
-                `/delete 1234567890` - 指定したIDの投稿を削除します
-                `/search キーワード` - 投稿を検索します
-                `/list` - 投稿の一覧を表示します
-                `/edit 1234567890` - 指定したIDの投稿を編集します
-                """,
-                inline=False
-            )
-            
             # フッターを追加
             embed.set_footer(text="※ 各コマンドの詳細はスラッシュ(/)を入力して確認できます")
             
