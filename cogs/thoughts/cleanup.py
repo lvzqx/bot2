@@ -135,7 +135,8 @@ class Cleanup(commands.Cog):
         try:
             with self._get_db_connection() as conn:
                 with conn:
-                    with self._get_cursor(conn) as cursor:
+                    cursor = conn.cursor()
+                    try:
                         # 古い非公開投稿を取得
                         cursor.execute('''
                             SELECT t.id, t.user_id, mr.message_id, mr.channel_id
@@ -174,6 +175,8 @@ class Cleanup(commands.Cog):
                                     exc_info=True
                                 )
                                 continue
+                    finally:
+                        cursor.close()
         
         except sqlite3.Error as e:
             logger.error(f"データベースエラー: {e}", exc_info=True)
