@@ -49,12 +49,10 @@ class Cleanup(commands.Cog):
         """データベースを初期化します。"""
         with self._get_db_connection() as conn:
             with self._get_cursor(conn) as cursor:
-                # パフォーマンス向上のためのPRAGMA設定
-                cursor.execute('''
-                    PRAGMA journal_mode=WAL;
-                    PRAGMA synchronous=NORMAL;
-                    PRAGMA foreign_keys=ON;
-                ''')
+                # パフォーマンス向上のためのPRAGMA設定（一つずつ実行）
+                cursor.execute('PRAGMA journal_mode=WAL')
+                cursor.execute('PRAGMA synchronous=NORMAL')
+                cursor.execute('PRAGMA foreign_keys=ON')
                 conn.commit()
     
     @contextlib.contextmanager
