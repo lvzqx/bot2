@@ -53,7 +53,7 @@ class Delete(commands.Cog):
                             mr.channel_id, 
                             mr.message_id, 
                             t.user_id,
-                            t.is_public
+                            t.is_private
                         FROM message_references mr
                         JOIN thoughts t ON mr.post_id = t.id
                         WHERE CAST(mr.message_id AS TEXT) = ?
@@ -79,7 +79,7 @@ class Delete(commands.Cog):
                                     mr.channel_id, 
                                     mr.message_id, 
                                     t.user_id,
-                                    t.is_public
+                                    t.is_private
                                 FROM message_references mr
                                 JOIN thoughts t ON mr.post_id = t.id
                                 WHERE mr.message_id = ?
@@ -109,12 +109,12 @@ class Delete(commands.Cog):
                     with self._get_cursor(conn) as cursor:
                         # 投稿が存在するか確認（非公開かどうかも取得）
                         cursor.execute('''
-                            SELECT user_id, is_public FROM thoughts 
+                            SELECT user_id, is_private FROM thoughts 
                             WHERE id = ?
                         ''', (post_id,))
                         
                         if result := cursor.fetchone():
-                            post_owner_id, is_public = result[0], bool(result[1])
+                            post_owner_id, is_private = result[0], bool(result[1])
                             # 投稿者または管理者でない場合は削除不可
                             if str(post_owner_id) != str(user_id) and not is_admin:
                                 return False, None
@@ -128,7 +128,7 @@ class Delete(commands.Cog):
                         ''', (post_id,))
                         
                         # 削除された投稿が非公開かどうかを返す
-                        return cursor.rowcount > 0, not is_public
+                        return cursor.rowcount > 0, is_private
         except sqlite3.Error as e:
             logger.error(f"投稿の削除中にエラーが発生しました: {e}")
             return False, None
@@ -147,7 +147,7 @@ class Delete(commands.Cog):
                             cursor.execute('''
                                 SELECT COUNT(*) as count 
                                 FROM thoughts 
-                                WHERE user_id = ? AND is_public = 0
+                                WHERE user_id = ? AND is_private = 1
                             ''', (user_id,))
                             remaining_posts = cursor.fetchone()['count']
                             
@@ -183,7 +183,7 @@ class Delete(commands.Cog):
             is_admin = interaction.user.guild_permissions.administrator
             
             # 非公開の投稿で、投稿者でも管理者でもない場合はエラー
-            if not message_data['is_public'] and message_data['user_id'] != interaction.user.id and not is_admin:
+            if bool(message_data['is_private']) and message_data['user_id'] != interaction.user.id and not is_admin:
                 await interaction.followup.send(
                     "❌ この投稿は非公開のため、投稿者または管理者のみが削除できます。",
                     ephemeral=True
@@ -298,12 +298,6 @@ class Delete(commands.Cog):
                     ephemeral=True
                 )
                 logger.warning(f"メッセージの削除中にエラーが発生しました: {e}")
-            
-            # 完了メッセージを送信
-            await interaction.followup.send(
-                f"✅ 投稿 (ID: {message_data['post_id']}) を削除しました。",
-                ephemeral=True
-            )
             
         except Exception as e:
             logger.error(f"削除処理中にエラーが発生しました: {e}", exc_info=True)
