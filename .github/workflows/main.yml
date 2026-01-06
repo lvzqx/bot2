@@ -34,13 +34,19 @@ jobs:
         mkdir -p data
         chmod 755 data
     
+    - name: Pull latest database
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git pull origin main || true
+    
     - name: Download database from cache
       uses: actions/cache@v3
       with:
         path: data/
-        key: bot-db-${{ github.ref }}
+        key: bot-db-main
         restore-keys: |
-          bot-db-
+          bot-db-main
     
     - name: Check if bot is running
       id: check_bot
@@ -117,7 +123,27 @@ jobs:
       uses: actions/cache@v3
       with:
         path: data/
-        key: bot-db-${{ github.ref }}
+        key: bot-db-main
+    
+    - name: Commit database changes
+      if: always()
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        # データベースが存在し、変更がある場合のみコミット
+        if [ -f "data/thoughts.db" ]; then
+          git add data/thoughts.db
+          
+          # 変更があるかチェック
+          if ! git diff --cached --quiet; then
+            git commit -m "🗄️ Update database - $(date '+%Y-%m-%d %H:%M:%S')"
+            git push origin main
+            echo "✅ データベースをコミットしました"
+          else
+            echo "ℹ️ データベースに変更はありません"
+          fi
+        fi
     
     - name: Show logs
       if: always()
