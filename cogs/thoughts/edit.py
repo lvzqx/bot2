@@ -409,14 +409,33 @@ class Edit(commands.Cog):
                         
                         message_ref = cursor.fetchone()
                         if not message_ref:
+                            logger.warning(f"Post {self.post_id} のメッセージ参照が見つかりません")
                             return
                             
                         message_id, channel_id = message_ref
+                        logger.info(f"メッセージ更新を試行: post_id={self.post_id}, message_id={message_id}, channel_id={channel_id}")
+                        
+                        # チャンネルを取得（キャッシュから取得できない場合はfetch）
                         channel = self.bot.get_channel(int(channel_id))
                         if not channel:
+                            try:
+                                channel = await self.bot.fetch_channel(int(channel_id))
+                            except Exception as e:
+                                logger.error(f"チャンネル {channel_id} の取得に失敗しました: {e}")
+                                return
+                        
+                        if not channel:
+                            logger.error(f"チャンネル {channel_id} が見つかりません")
                             return
                             
-                        message = await channel.fetch_message(int(message_id))
+                        try:
+                            message = await channel.fetch_message(int(message_id))
+                        except discord.NotFound:
+                            logger.error(f"メッセージ {message_id} が見つかりません")
+                            return
+                        except discord.Forbidden:
+                            logger.error(f"メッセージ {message_id} へのアクセス権限がありません")
+                            return
                         
                         # 埋め込みメッセージを作成
                         embed = discord.Embed(
@@ -441,6 +460,25 @@ class Edit(commands.Cog):
                             embed.set_image(url=image_url)
                         
                         await message.edit(embed=embed)
+                        logger.info(f"メッセージを更新しました: post_id={self.post_id}, message_id={message_id}")
+                        
+                        # 非公開投稿の場合はスレッドの最初のメッセージも更新
+                        if self._is_private:
+                            try:
+                                # スレッドの場合はスレッド自体の名前も更新
+                                if hasattr(channel, 'thread') and channel.thread:
+                                    thread = channel.thread
+                                elif isinstance(channel, discord.Thread):
+                                    thread = channel
+                                else:
+                                    thread = None
+                                
+                                if thread:
+                                    preview = content[:50] + ('...' if len(content) > 50 else '')
+                                    await thread.edit(name=f"非公開投稿 - ID: {self.post_id} - {preview}")
+                                    logger.info(f"スレッド名を更新しました: post_id={self.post_id}")
+                            except Exception as e:
+                                logger.warning(f"スレッド名の更新に失敗しました: {e}")
                         
             except Exception as e:
                 logger.error(f"Discordメッセージの更新中にエラーが発生しました: {e}", exc_info=True)
