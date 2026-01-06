@@ -151,6 +151,10 @@ class Search(commands.Cog):
                     query += " ORDER BY t.created_at DESC LIMIT ?"
                     params.append(limit)
                     
+                    # デバッグログ
+                    logger.info(f"SQLクエリ: {query}")
+                    logger.info(f"パラメータ: {params}")
+                    
                     # クエリ実行
                     cursor.execute(query, params)
                     
@@ -296,6 +300,9 @@ class Search(commands.Cog):
             f"keyword={keyword}, category={category}, limit={limit}, target_user={user_id}"
         )
         
+        # タイムアウト対策：早めに処理開始をログ
+        start_time = datetime.now()
+        
         try:
             # 投稿を検索
             posts = await self._search_posts(
@@ -305,6 +312,10 @@ class Search(commands.Cog):
                 user_id=user_id,
                 current_user_id=interaction.user.id
             )
+            
+            # 処理時間をログ
+            search_time = (datetime.now() - start_time).total_seconds()
+            logger.info(f"検索完了: {len(posts)}件, {search_time:.2f}秒")
             
             if not posts:
                 await interaction.followup.send(
