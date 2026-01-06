@@ -131,8 +131,7 @@ class Search(commands.Cog):
             # 埋め込みメッセージを作成
             embed = discord.Embed(
                 title=f"🔍 検索結果 ({len(posts)}件)",
-                color=discord.Color.blue(),
-                timestamp=datetime.now()
+                color=discord.Color.blue()
             )
             
             for post in page_posts:
