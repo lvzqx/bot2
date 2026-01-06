@@ -359,6 +359,7 @@ class Edit(commands.Cog):
                     await self._update_discord_message(interaction, content, category, image_url)
                 except Exception as e:
                     logger.warning(f"Discordメッセージの更新に失敗しましたが、データベースは更新されています: {e}")
+                    print(f"[DEBUG] Discordメッセージ更新エラー: {e}")
                 
                 # 成功メッセージを送信
                 await interaction.response.send_message(
