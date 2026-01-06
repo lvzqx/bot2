@@ -3,8 +3,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Optional, Tuple
 
 import discord
 from discord import app_commands, ui
@@ -19,83 +18,17 @@ from config import CHANNELS, DEFAULT_AVATAR
 # ロガーの設定
 logger = logging.getLogger(__name__)
 
-# 最大文字数制限
-MAX_CONTENT_LENGTH = 2000
-MAX_CATEGORY_LENGTH = 50
-DEFAULT_CATEGORY = 'その他'
-
 class Post(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        self._init_db()
         logger.info("Post cog が初期化されました")
 
     @app_commands.command(name="post", description="新しい投稿を作成します")
     @app_commands.guild_only()
     async def post(self, interaction: discord.Interaction) -> None:
         """新しい投稿を作成します"""
-        print(f"post コマンドが呼び出されました: {interaction.user}")
-        print(f"利用可能なコマンド: {[cmd.name for cmd in self.bot.tree.get_commands()]}")
         logger.info(f"post コマンドが呼び出されました。ユーザー: {interaction.user}")
-        # モーダルを表示
-        await interaction.response.send_modal(self.PostModal())
-
-    def _init_db(self) -> None:
-        """データベースを初期化します。"""
-        with self._get_db_connection() as conn:
-            with self._get_cursor(conn) as cursor:
-                # パフォーマンス向上のためのPRAGMA設定
-                cursor.execute('''
-                    PRAGMA journal_mode=WAL;
-                    PRAGMA synchronous=NORMAL;
-                    PRAGMA foreign_keys=ON;
-                ''')
-                
-                # テーブルが存在しない場合は作成
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS thoughts (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        user_id INTEGER NOT NULL,
-                        content TEXT NOT NULL,
-                        category TEXT,
-                        image_url TEXT,
-                        is_anonymous BOOLEAN DEFAULT 0,
-                        is_private BOOLEAN DEFAULT 0,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        display_name TEXT
-                    )
-                ''')
-                
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS message_references (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        channel_id TEXT NOT NULL,
-                        message_id TEXT NOT NULL UNIQUE,
-                        post_id INTEGER NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (post_id) REFERENCES thoughts (id) ON DELETE CASCADE
-                    )
-                ''')
-                
-                # インデックスを作成
-                cursor.execute('''
-                    CREATE INDEX IF NOT EXISTS idx_thoughts_user_id 
-                    ON thoughts(user_id);
-                ''')
-                
-                cursor.execute('''
-                    CREATE INDEX IF NOT EXISTS idx_message_references_post_id 
-                    ON message_references(post_id);
-                ''')
-                
-                cursor.execute('''
-                    CREATE INDEX IF NOT EXISTS idx_message_references_message_id 
-                    ON message_references(message_id);
-                ''')
-                
-                conn.commit()
-                logger.info("データベースの初期化が完了しました")
+        await interaction.response.send_modal(PostModal())
 
     @contextmanager
     def _get_db_connection(self) -> sqlite3.Connection:
@@ -310,22 +243,18 @@ class Post(commands.Cog):
                     
                     # データベースには通常のチャンネルIDを保存
                     channel = private_channel
-                    
-                    # データベースには通常のチャンネルIDを保存（実際の投稿先は非公開チャンネル）
-                    channel = private_channel
                 
                 # メッセージ参照を保存
                 with post_cog._get_db_connection() as conn:
                     with post_cog._get_cursor(conn) as cursor:
                         cursor.execute('''
                             INSERT INTO message_references (
-                                channel_id, message_id, post_id, is_public
-                            ) VALUES (?, ?, ?, ?)
+                                channel_id, message_id, post_id
+                            ) VALUES (?, ?, ?)
                         ''', (
                             str(channel.id),
                             str(sent_message.id),
-                            post_id,
-                            1 if is_public else 0
+                            post_id
                         ))
                         conn.commit()
                 
