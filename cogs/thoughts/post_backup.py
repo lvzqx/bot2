@@ -121,8 +121,8 @@ class Post(commands.Cog):
             cursor.close()
 
     async def _save_post_to_db(self, user_id: int, message: str, category: Optional[str] = None, 
-                             image_url: Optional[str] = None, is_public: bool = True, 
-                             is_anonymous: bool = False) -> int:
+                            image_url: Optional[str] = None, is_public: bool = True, 
+                            is_anonymous: bool = False) -> int:
         """投稿をデータベースに保存し、投稿IDを返します"""
         try:
             with self._get_db_connection() as conn:
@@ -157,9 +157,9 @@ class Post(commands.Cog):
             self.value = self.values[0]
             await interaction.response.defer()
     
-    class PostModal(ui.Modal, title='新規投稿'):
+    class PostModal(ui.Modal):
         def __init__(self) -> None:
-            super().__init__(timeout=300)
+            super().__init__(title='新規投稿', timeout=300)
             self.is_public = True  # デフォルトは公開
             
             # メッセージ入力
@@ -190,7 +190,7 @@ class Post(commands.Cog):
             self.add_item(self.image_url)
             
             # 公開/非公開選択（ビューとして追加）
-            self.visibility_select = Post.VisibilitySelect()
+            self.visibility_select = self.VisibilitySelect()
             self.visibility_view = ui.View(timeout=300)
             self.visibility_view.add_item(self.visibility_select)
             
@@ -203,7 +203,6 @@ class Post(commands.Cog):
             self.add_item(self.anonymous)
 
         async def on_submit(self, interaction: discord.Interaction) -> None:
-            """フォームが送信されたときの処理"""
             await interaction.response.defer(ephemeral=True)
             
             # モーダルから値を取得
@@ -349,6 +348,7 @@ class Post(commands.Cog):
                     "❌ 投稿中にエラーが発生しました。しばらくしてからもう一度お試しください。",
                     ephemeral=True
                 )
+
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Post(bot))

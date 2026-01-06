@@ -166,6 +166,15 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
             # 同期前に登録されているコマンドを確認
             before_sync_commands = {cmd.name for cmd in self.tree.get_commands()}
             logger.info(f'同期前の登録コマンド数: {len(before_sync_commands)}')
+            logger.info(f'同期前の登録コマンド: {before_sync_commands}')
+            
+            # post コマンドが登録されているか確認
+            post_cog = self.get_cog('Post')
+            if post_cog:
+                logger.info('Post cog は正常に読み込まれています')
+                logger.info(f'Post cog のメソッド: {[name for name, _ in post_cog.get_commands()]}')
+            else:
+                logger.warning('Post cog が読み込まれていません')
             
             # コマンドツリーを同期
             synced = await self.tree.sync()
