@@ -84,7 +84,7 @@ class Post(commands.Cog):
             self.add_item(self.anonymous)
             
             # 公開/非公開選択を追加
-            self.visibility_select = self.VisibilitySelect()
+            self.visibility_select = Post.VisibilitySelect()
             self.add_item(self.visibility_select)
 
         async def on_submit(self, interaction: discord.Interaction) -> None:
@@ -373,7 +373,7 @@ class Post(commands.Cog):
             self.add_item(self.anonymous)
             
             # 公開/非公開選択を追加
-            self.visibility_select = self.VisibilitySelect()
+            self.visibility_select = Post.VisibilitySelect()
             self.add_item(self.visibility_select)
 
         async def on_submit(self, interaction: discord.Interaction) -> None:
