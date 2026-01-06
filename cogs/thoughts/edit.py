@@ -409,14 +409,17 @@ class Edit(commands.Cog):
                         
                         message_ref = cursor.fetchone()
                         if not message_ref:
+                            print(f"[DEBUG] Post {self.post_id} のメッセージ参照が見つかりません")
                             logger.warning(f"Post {self.post_id} のメッセージ参照が見つかりません")
                             logger.info(f"現在のメッセージ参照を確認します...")
                             cursor.execute('SELECT post_id, message_id, channel_id FROM message_references LIMIT 5')
                             refs = cursor.fetchall()
+                            print(f"[DEBUG] メッセージ参照一覧: {refs}")
                             logger.info(f"メッセージ参照一覧: {refs}")
                             return
                             
                         message_id, channel_id = message_ref
+                        print(f"[DEBUG] メッセージ更新を試行: post_id={self.post_id}, message_id={message_id}, channel_id={channel_id}")
                         logger.info(f"メッセージ更新を試行: post_id={self.post_id}, message_id={message_id}, channel_id={channel_id}")
                         
                         # チャンネルを取得（キャッシュから取得できない場合はfetch）
@@ -464,6 +467,7 @@ class Edit(commands.Cog):
                             embed.set_image(url=image_url)
                         
                         await message.edit(embed=embed)
+                        print(f"[DEBUG] メッセージを更新しました: post_id={self.post_id}, message_id={message_id}")
                         logger.info(f"メッセージを更新しました: post_id={self.post_id}, message_id={message_id}")
                         
                         # 非公開投稿の場合はスレッドの最初のメッセージも更新
