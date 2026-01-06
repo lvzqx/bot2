@@ -354,6 +354,9 @@ class Edit(commands.Cog):
                         
                         conn.commit()
                 
+                # Discordメッセージを更新
+                await self._update_discord_message(interaction, content, category, image_url)
+                
                 # 成功メッセージを送信
                 await interaction.response.send_message(
                     f"✅ 投稿を更新しました！ (ID: {self.post_id})",
@@ -376,6 +379,68 @@ class Edit(commands.Cog):
                         "投稿の更新中にエラーが発生しました。",
                         ephemeral=True
                     )
+        
+        async def _update_discord_message(
+            self, 
+            interaction: discord.Interaction, 
+            content: str, 
+            category: Optional[str], 
+            image_url: Optional[str]
+        ) -> None:
+            """Discordのメッセージを更新します。
+            
+            Args:
+                interaction: インタラクションオブジェクト
+                content: 投稿内容
+                category: カテゴリー
+                image_url: 画像URL
+            """
+            try:
+                with self._get_db_connection() as conn:
+                    with self._get_cursor(conn) as cursor:
+                        cursor.execute("""
+                            SELECT message_id, channel_id 
+                            FROM message_references 
+                            WHERE post_id = ?
+                        """, (self.post_id,))
+                        
+                        message_ref = cursor.fetchone()
+                        if not message_ref:
+                            return
+                            
+                        message_id, channel_id = message_ref
+                        channel = self.bot.get_channel(int(channel_id))
+                        if not channel:
+                            return
+                            
+                        message = await channel.fetch_message(int(message_id))
+                        
+                        # 埋め込みメッセージを作成
+                        embed = discord.Embed(
+                            description=content,
+                            color=discord.Color.blue()
+                        )
+                        
+                        # 表示名を設定
+                        if self._is_anonymous:
+                            embed.set_author(name='匿名')
+                        else:
+                            embed.set_author(
+                                name=interaction.user.display_name,
+                                icon_url=str(interaction.user.display_avatar.url)
+                            )
+                        
+                        # フッターにカテゴリーと投稿IDを表示
+                        embed.set_footer(text=f'カテゴリー: {category or "未設定"} | ID: {self.post_id}')
+                        
+                        # 画像があれば追加
+                        if image_url:
+                            embed.set_image(url=image_url)
+                        
+                        await message.edit(embed=embed)
+                        
+            except Exception as e:
+                logger.error(f"Discordメッセージの更新中にエラーが発生しました: {e}", exc_info=True)
         
         async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
             """エラーが発生した際に呼び出されます。
