@@ -354,8 +354,11 @@ class Edit(commands.Cog):
                         
                         conn.commit()
                 
-                # Discordメッセージを更新
-                await self._update_discord_message(interaction, content, category, image_url)
+                # Discordメッセージを更新（エラーが無視されるように）
+                try:
+                    await self._update_discord_message(interaction, content, category, image_url)
+                except Exception as e:
+                    logger.warning(f"Discordメッセージの更新に失敗しましたが、データベースは更新されています: {e}")
                 
                 # 成功メッセージを送信
                 await interaction.response.send_message(
