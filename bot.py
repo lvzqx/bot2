@@ -130,7 +130,6 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
             'cogs.thoughts.search',
             'cogs.thoughts.edit',
             'cogs.thoughts.cleanup',
-            'cogs.thoughts.auto_delete',
             'cogs.thoughts.help',
         ]
         
