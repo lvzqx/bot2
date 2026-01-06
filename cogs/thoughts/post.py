@@ -18,28 +18,32 @@ from config import CHANNELS, DEFAULT_AVATAR
 # ロガーの設定
 logger = logging.getLogger(__name__)
 
-class VisibilitySelect(ui.Select):
-    def __init__(self):
-        options = [
-            discord.SelectOption(label='公開', value='public', description='誰でも見ることができます', emoji='👥'),
-            discord.SelectOption(label='非公開', value='private', description='自分と管理者のみが削除できます', emoji='🔒')
-        ]
-        super().__init__(
-            placeholder='公開設定を選択...',
-            min_values=1,
-            max_values=1,
-            options=options
-        )
-        self.value = 'public'  # デフォルト値
-        
-    async def callback(self, interaction: discord.Interaction):
-        self.value = self.values[0]
-        await interaction.response.defer()
+class Post(commands.Cog):
+    def __init__(self, bot: commands.Bot) -> None:
+        self.bot = bot
+        logger.info("Post cog が初期化されました")
 
 class PostModal(ui.Modal, title='新規投稿'):
+    class VisibilitySelect(ui.Select):
+        def __init__(self):
+            options = [
+                discord.SelectOption(label='公開', value='public', description='誰でも見ることができます', emoji='👥'),
+                discord.SelectOption(label='非公開', value='private', description='自分と管理者のみが削除できます', emoji='🔒')
+            ]
+            super().__init__(
+                placeholder='公開設定を選択...',
+                min_values=1,
+                max_values=1,
+                options=options
+            )
+            self.value = 'public'  # デフォルト値
+            
+        async def callback(self, interaction: discord.Interaction):
+            self.value = self.values[0]
+            await interaction.response.defer()
+            
     def __init__(self) -> None:
         super().__init__(timeout=300)  # 明示的にタイムアウトを設定
-        self.is_public = True  # デフォルトは公開
         
         # メッセージ入力
         self.message = ui.TextInput(
@@ -72,14 +76,16 @@ class PostModal(ui.Modal, title='新規投稿'):
             required=False
         )
         
-        # UIコンポーネントを追加
-        self.add_item(self.message)
-        self.add_item(self.category)
-        self.add_item(self.image_url)
-        self.add_item(self.anonymous)
+        # 公開/非公開選択
+        self.visibility_select = self.VisibilitySelect()
         
-        # 公開/非公開選択（ビューとして追加）
-        self.visibility_select = VisibilitySelect()
+        # UIコンポーネントを追加（指定された順序で）
+        self.add_item(self.message)         # メッセージ入力
+        self.add_item(self.category)        # カテゴリ入力
+        self.add_item(self.image_url)       # 画像URL入力
+        self.add_item(self.anonymous)       # 匿名設定
+        
+        # 公開/非公開選択をビューとして追加
         self.visibility_view = ui.View(timeout=300)
         self.visibility_view.add_item(self.visibility_select)
 
@@ -92,7 +98,7 @@ class PostModal(ui.Modal, title='新規投稿'):
         category = self.category.value if self.category.value else None
         image_url = self.image_url.value if self.image_url.value else None
         is_public = self.visibility_select.value == 'public'
-        is_anonymous = self.anonymous.value.lower() == '匿名'
+        is_anonymous = self.anonymous.value.lower() == '匿名' if self.anonymous.value else False
         
         # データベースに保存
         try:
