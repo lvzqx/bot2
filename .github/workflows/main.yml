@@ -130,7 +130,7 @@ jobs:
         git config --global user.email "actions@github.com"
         
         # gh-pages ブランチを作成・チェックアウト
-        git checkout --orphan gh-pages
+        git checkout --orphan gh-pages 2>/dev/null || git checkout gh-pages
         git rm -rf . || true
         
         # データベースをコピー
@@ -141,7 +141,7 @@ jobs:
         
         # コミットしてプッシュ
         git add .
-        git commit -m "Update database - $(date)"
+        git commit -m "Update database - $(date)" || true
         git push origin gh-pages --force
         
         echo "データベースを GitHub Pages にアップロードしました"
