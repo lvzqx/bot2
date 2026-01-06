@@ -255,6 +255,10 @@ class Search(commands.Cog):
             )
             
         except Exception as e:
+            print(f"[SEARCH ERROR] {e}")
+            print(f"[SEARCH ERROR TYPE] {type(e).__name__}")
+            import traceback
+            traceback.print_exc()
             logger.error(f"検索中にエラーが発生しました: {e}", exc_info=True)
             await interaction.followup.send(
                 "❌ 検索中にエラーが発生しました。しばらくしてからもう一度お試しください。",
