@@ -189,7 +189,7 @@ class List(commands.Cog):
                             
                             # 投稿をフィールドとして追加
                             embed.add_field(
-                                name=f"ID: {post_id} | {display_name} | {post['created_at'].split(' ')[0]}",
+                                name=f"ID: {post_id} | {display_name}",
                                 value=field_value,
                                 inline=False
                             )

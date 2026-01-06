@@ -167,7 +167,7 @@ class Search(commands.Cog):
                 
                 # フィールドを追加
                 embed.add_field(
-                    name=f"ID: {post['id']} | {author_name} | {post['created_at'].split(' ')[0]}",
+                    name=f"ID: {post['id']} | {author_name}",
                     value=field_value,
                     inline=False
                 )
