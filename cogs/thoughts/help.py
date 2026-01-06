@@ -1,9 +1,13 @@
 """ヘルプコマンドを提供するCog"""
 
+import logging
 import discord
 from discord import app_commands
 from discord.ext import commands
 from typing import Optional
+
+# ロガーの設定
+logger = logging.getLogger(__name__)
 
 class Help(commands.Cog):
     """ヘルプコマンドを提供するCog"""
@@ -11,7 +15,7 @@ class Help(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         
-    @app_commands.command(name="help", description="利用可能なコマンドを表示します")
+    @app_commands.command(name="help")
     async def help_command(self, interaction: discord.Interaction):
         """利用可能なコマンドを表示します"""
         try:
@@ -46,7 +50,7 @@ class Help(commands.Cog):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             
         except Exception as e:
-            self.bot.logger.error(f'Help command error: {e}', exc_info=True)
+            logger.error(f'Help command error: {e}', exc_info=True)
             if not interaction.response.is_done():
                 await interaction.response.send_message(
                     "ヘルプの表示中にエラーが発生しました。", 
