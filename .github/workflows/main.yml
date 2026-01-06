@@ -29,6 +29,24 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
+    - name: Download database from GitHub Pages
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # GitHub Pages からデータベースをダウンロード
+        REPO_OWNER="${{ github.repository_owner }}"
+        REPO_NAME="${{ github.event.repository.name }}"
+        
+        echo "データベースをダウンロードします..."
+        
+        # curl でデータベースをダウンロード
+        if curl -f -s -L "https://${REPO_OWNER}.github.io/${REPO_NAME}/thoughts.db" -o thoughts.db; then
+          echo "既存のデータベースをダウンロードしました"
+          ls -la thoughts.db
+        else
+          echo "データベースが存在しないため、新規作成します"
+        fi
+    
     - name: Check if bot is running
       id: check_bot
       env:
@@ -46,6 +64,18 @@ jobs:
         else
           echo "ボットは既に実行中です"
           echo "RUN_BOT=false" >> $GITHUB_ENV
+        fi
+    
+    - name: Initialize database if not exists
+      if: env.RUN_BOT == 'true'
+      run: |
+        # データベースが存在しない場合は初期化
+        if [ ! -f "thoughts.db" ]; then
+          echo "データベースを初期化します"
+          python scripts/init_db.py
+        else
+          echo "既存のデータベースを使用します"
+          ls -la thoughts.db
         fi
     
     - name: Run bot
@@ -89,7 +119,33 @@ jobs:
           # 1分ごとにチェック
           sleep 60
         done
-
+    
+    - name: Upload database to GitHub Pages
+      if: always() && env.RUN_BOT == 'true'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # GitHub Pages 用のブランチを設定
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+        
+        # gh-pages ブランチを作成・チェックアウト
+        git checkout --orphan gh-pages
+        git rm -rf . || true
+        
+        # データベースをコピー
+        cp thoughts.db ./
+        
+        # index.html を作成（GitHub Pages の要件）
+        echo "<html><body><h1>Discord Bot Database</h1></body></html>" > index.html
+        
+        # コミットしてプッシュ
+        git add .
+        git commit -m "Update database - $(date)"
+        git push origin gh-pages --force
+        
+        echo "データベースを GitHub Pages にアップロードしました"
+    
     - name: Show logs
       if: always()
       run: |
