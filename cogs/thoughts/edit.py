@@ -477,22 +477,22 @@ class Edit(commands.Cog):
                         logger.info(f"メッセージを更新しました: post_id={self.post_id}, message_id={message_id}")
                         
                         # 非公開投稿の場合はスレッドの最初のメッセージも更新
-                        if self._is_private:
-                            try:
-                                # スレッドの場合はスレッド自体の名前も更新
-                                if hasattr(channel, 'thread') and channel.thread:
-                                    thread = channel.thread
-                                elif isinstance(channel, discord.Thread):
-                                    thread = channel
-                                else:
-                                    thread = None
-                                
-                                if thread:
-                                    preview = content[:50] + ('...' if len(content) > 50 else '')
-                                    await thread.edit(name=f"非公開投稿 - ID: {self.post_id} - {preview}")
-                                    logger.info(f"スレッド名を更新しました: post_id={self.post_id}")
-                            except Exception as e:
-                                logger.warning(f"スレッド名の更新に失敗しました: {e}")
+                        # if self._is_private:
+                        #     try:
+                        #         # スレッドの場合はスレッド自体の名前も更新
+                        #         if hasattr(channel, 'thread') and channel.thread:
+                        #             thread = channel.thread
+                        #         elif isinstance(channel, discord.Thread):
+                        #             thread = channel
+                        #         else:
+                        #             thread = None
+                        #         
+                        #         if thread:
+                        #             preview = content[:50] + ('...' if len(content) > 50 else '')
+                        #             await thread.edit(name=f"非公開投稿 - ID: {self.post_id} - {preview}")
+                        #             logger.info(f"スレッド名を更新しました: post_id={self.post_id}")
+                        #     except Exception as e:
+                        #         logger.warning(f"スレッド名の更新に失敗しました: {e}")
                         
             except Exception as e:
                 logger.error(f"Discordメッセージの更新中にエラーが発生しました: {e}", exc_info=True)
@@ -602,22 +602,22 @@ class Edit(commands.Cog):
                         logger.info(f"メッセージを更新しました: post_id={self.post_id}, message_id={message_id}")
                         
                         # 非公開投稿の場合はスレッドの最初のメッセージも更新
-                        if self._is_private:
-                            try:
-                                # スレッドの場合はスレッド自体の名前も更新
-                                if hasattr(channel, 'thread') and channel.thread:
-                                    thread = channel.thread
-                                elif isinstance(channel, discord.Thread):
-                                    thread = channel
-                                else:
-                                    thread = None
-                                
-                                if thread:
-                                    preview = content[:50] + ('...' if len(content) > 50 else '')
-                                    await thread.edit(name=f"非公開投稿 - ID: {self.post_id} - {preview}")
-                                    logger.info(f"スレッド名を更新しました: post_id={self.post_id}")
-                            except Exception as e:
-                                logger.warning(f"スレッド名の更新に失敗しました: {e}")
+                        # if self._is_private:
+                        #     try:
+                        #         # スレッドの場合はスレッド自体の名前も更新
+                        #         if hasattr(channel, 'thread') and channel.thread:
+                        #             thread = channel.thread
+                        #         elif isinstance(channel, discord.Thread):
+                        #             thread = channel
+                        #         else:
+                        #             thread = None
+                        #         
+                        #         if thread:
+                        #             preview = content[:50] + ('...' if len(content) > 50 else '')
+                        #             await thread.edit(name=f"非公開投稿 - ID: {self.post_id} - {preview}")
+                        #             logger.info(f"スレッド名を更新しました: post_id={self.post_id}")
+                        #     except Exception as e:
+                        #         logger.warning(f"スレッド名の更新に失敗しました: {e}")
                         
             except Exception as e:
                 logger.error(f"Discordメッセージの更新中にエラーが発生しました: {e}", exc_info=True)
