@@ -83,10 +83,9 @@ class Post(commands.Cog):
             self.add_item(self.image_url)
             self.add_item(self.anonymous)
             
-            # 公開/非公開選択（ビューとして追加）
-            self.visibility_select = Post.VisibilitySelect()
-            self.visibility_view = ui.View(timeout=300)
-            self.visibility_view.add_item(self.visibility_select)
+            # 公開/非公開選択を追加
+            self.visibility_select = self.VisibilitySelect()
+            self.add_item(self.visibility_select)
 
         async def on_submit(self, interaction: discord.Interaction) -> None:
             """フォームが送信されたときの処理"""
@@ -373,10 +372,9 @@ class Post(commands.Cog):
             self.add_item(self.image_url)
             self.add_item(self.anonymous)
             
-            # 公開/非公開選択（ビューとして追加）
-            self.visibility_select = Post.VisibilitySelect()
-            self.visibility_view = ui.View(timeout=300)
-            self.visibility_view.add_item(self.visibility_select)
+            # 公開/非公開選択を追加
+            self.visibility_select = self.VisibilitySelect()
+            self.add_item(self.visibility_select)
 
         async def on_submit(self, interaction: discord.Interaction) -> None:
             """フォームが送信されたときの処理"""
