@@ -184,6 +184,45 @@ class Edit(commands.Cog):
             self.private_button.callback = self.toggle_private
             self.toggle_view.add_item(self.private_button)
         
+        @contextmanager
+        def _get_db_connection(self) -> Iterator[sqlite3.Connection]:
+            """データベース接続を取得します。
+            
+            Yields:
+                sqlite3.Connection: データベース接続
+            """
+            try:
+                conn = sqlite3.connect('thoughts.db')
+                conn.row_factory = sqlite3.Row
+                conn.execute("PRAGMA foreign_keys = ON")
+                yield conn
+            except sqlite3.Error as e:
+                logger.error(f"データベース接続エラー: {e}", exc_info=True)
+                raise
+            finally:
+                if 'conn' in locals():
+                    conn.close()
+        
+        @contextmanager
+        def _get_cursor(self, conn: sqlite3.Connection) -> Iterator[sqlite3.Cursor]:
+            """データベースカーソルを取得します。
+            
+            Args:
+                conn: データベース接続
+                
+            Yields:
+                sqlite3.Cursor: データベースカーソル
+            """
+            try:
+                cursor = conn.cursor()
+                yield cursor
+            except sqlite3.Error as e:
+                logger.error(f"カーソル操作エラー: {e}", exc_info=True)
+                raise
+            finally:
+                if 'cursor' in locals():
+                    cursor.close()
+        
         async def toggle_anonymous(self, interaction: discord.Interaction) -> None:
             """匿名設定をトグルします。
             
