@@ -127,12 +127,7 @@ class Search(commands.Cog):
                         SELECT 
                             t.id, t.content, t.category, t.created_at, 
                             t.display_name, t.user_id, t.is_anonymous, t.is_private,
-                            t.image_url,
-                            (SELECT GROUP_CONCAT(a.url, '|') 
-                             FROM attachments a 
-                             WHERE a.post_id = t.id 
-                             AND a.url IS NOT NULL 
-                             AND a.url != '') as attachment_urls
+                            t.image_url
                         FROM thoughts t
                         WHERE 1=1
                     """
@@ -172,10 +167,6 @@ class Search(commands.Cog):
                     posts: List[PostData] = []
                     for row in rows:
                         post = dict(zip(columns, row))
-                        # 添付ファイルをリストに変換
-                        attachments = []
-                        if post.get('attachment_urls'):
-                            attachments = [url for url in post['attachment_urls'].split('|') if url]
                         
                         posts.append({
                             'id': post['id'],
@@ -187,8 +178,8 @@ class Search(commands.Cog):
                             'is_anonymous': bool(post['is_anonymous']),
                             'is_private': bool(post['is_private']),
                             'image_url': post.get('image_url'),
-                            'attachments': attachments,
-                            'attachment_urls': post.get('attachment_urls')
+                            'attachments': [],
+                            'attachment_urls': None
                         })
                     
                     return posts
@@ -247,19 +238,12 @@ class Search(commands.Cog):
                     field_value += "🔒 非公開\n"
                 
                 # 添付ファイルがある場合
-                if post.get('attachments'):
-                    image_urls = [
-                        url for url in post['attachments']
-                        if url.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))
-                    ]
-                    if image_urls:
-                        field_value += "\n🖼️ 画像が添付されています"
-                        if len(image_urls) > 1:
-                            field_value += f" ({len(image_urls)}枚)"
-                        
-                        # 最初の画像をサムネイルに設定
-                        if not embed.thumbnail and i == 0 and post == page_posts[0]:
-                            embed.set_thumbnail(url=image_urls[0])
+                if post.get('image_url'):
+                    field_value += "\n🖼️ 画像が添付されています"
+                    
+                    # 最初の画像をサムネイルに設定
+                    if not embed.thumbnail and i == 0 and post == page_posts[0]:
+                        embed.set_thumbnail(url=post['image_url'])
                 
                 # フィールドを追加
                 embed.add_field(

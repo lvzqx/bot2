@@ -96,11 +96,7 @@ class List(commands.Cog):
                             t.created_at, 
                             t.is_private, 
                             t.display_name,
-                            (SELECT GROUP_CONCAT(a.url, '|') 
-                             FROM attachments a 
-                             WHERE a.post_id = t.id 
-                             AND a.url IS NOT NULL 
-                             AND a.url != '') as attachment_urls
+                            t.image_url
                         FROM thoughts t
                         WHERE t.user_id = ?
                         ORDER BY t.created_at DESC
@@ -183,23 +179,13 @@ class List(commands.Cog):
                                 field_value += "🔒 非公開\n"
                             
                             # 添付ファイル情報を処理
-                            if post.get('attachment_urls'):
-                                attachments = [url for url in post['attachment_urls'].split('|') if url]
-                                # 画像URLを抽出
-                                image_urls = [
-                                    url for url in attachments 
-                                    if url.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))
-                                ]
+                            if post.get('image_url'):
+                                field_value += "\n🖼️ 画像が添付されています"
                                 
-                                if image_urls:
-                                    field_value += "\n🖼️ 画像が添付されています"
-                                    if len(image_urls) > 1:
-                                        field_value += f" ({len(image_urls)}枚)"
-                                    
-                                    # 最初の画像をサムネイルとして設定
-                                    if not embed.thumbnail and len(embed.fields) == 0:
-                                        # 最初の投稿の最初の画像のみをサムネイルに設定
-                                        embed.set_thumbnail(url=image_urls[0])
+                                # 最初の画像をサムネイルとして設定
+                                if not embed.thumbnail and len(embed.fields) == 0:
+                                    # 最初の投稿の最初の画像のみをサムネイルに設定
+                                    embed.set_thumbnail(url=post['image_url'])
                             
                             # 投稿をフィールドとして追加
                             embed.add_field(
