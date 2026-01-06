@@ -511,6 +511,114 @@ class Edit(commands.Cog):
             # discord.ui.Modal の既定の on_error も呼び出す
             await super().on_error(interaction, error)
         
+        async def _update_discord_message(
+            self, 
+            interaction: discord.Interaction, 
+            content: str, 
+            category: Optional[str], 
+            image_url: Optional[str]
+        ) -> None:
+            """Discordのメッセージを更新します。
+            
+            Args:
+                interaction: インタラクションオブジェクト
+                content: 投稿内容
+                category: カテゴリー
+                image_url: 画像URL
+            """
+            try:
+                with self._get_db_connection() as conn:
+                    with self._get_cursor(conn) as cursor:
+                        cursor.execute("""
+                            SELECT message_id, channel_id 
+                            FROM message_references 
+                            WHERE post_id = ?
+                        """, (self.post_id,))
+                        
+                        message_ref = cursor.fetchone()
+                        if not message_ref:
+                            print(f"[DEBUG] Post {self.post_id} のメッセージ参照が見つかりません")
+                            logger.warning(f"Post {self.post_id} のメッセージ参照が見つかりません")
+                            logger.info(f"現在のメッセージ参照を確認します...")
+                            cursor.execute('SELECT post_id, message_id, channel_id FROM message_references LIMIT 5')
+                            refs = cursor.fetchall()
+                            print(f"[DEBUG] メッセージ参照一覧: {refs}")
+                            logger.info(f"メッセージ参照一覧: {refs}")
+                            return
+                            
+                        message_id, channel_id = message_ref
+                        print(f"[DEBUG] メッセージ更新を試行: post_id={self.post_id}, message_id={message_id}, channel_id={channel_id}")
+                        logger.info(f"メッセージ更新を試行: post_id={self.post_id}, message_id={message_id}, channel_id={channel_id}")
+                        
+                        # チャンネルを取得（キャッシュから取得できない場合はfetch）
+                        channel = self.bot.get_channel(int(channel_id))
+                        if not channel:
+                            try:
+                                channel = await self.bot.fetch_channel(int(channel_id))
+                            except Exception as e:
+                                logger.error(f"チャンネル {channel_id} の取得に失敗しました: {e}")
+                                return
+                        
+                        if not channel:
+                            logger.error(f"チャンネル {channel_id} が見つかりません")
+                            return
+                            
+                        try:
+                            message = await channel.fetch_message(int(message_id))
+                        except discord.NotFound:
+                            logger.error(f"メッセージ {message_id} が見つかりません")
+                            return
+                        except discord.Forbidden:
+                            logger.error(f"メッセージ {message_id} へのアクセス権限がありません")
+                            return
+                        
+                        # 埋め込みメッセージを作成
+                        embed = discord.Embed(
+                            description=content,
+                            color=discord.Color.blue()
+                        )
+                        
+                        # 表示名を設定
+                        if self._is_anonymous:
+                            embed.set_author(name='匿名')
+                        else:
+                            embed.set_author(
+                                name=interaction.user.display_name,
+                                icon_url=str(interaction.user.display_avatar.url)
+                            )
+                        
+                        # フッターにカテゴリーと投稿IDを表示
+                        embed.set_footer(text=f'カテゴリー: {category or "未設定"} | ID: {self.post_id}')
+                        
+                        # 画像があれば追加
+                        if image_url:
+                            embed.set_image(url=image_url)
+                        
+                        await message.edit(embed=embed)
+                        print(f"[DEBUG] メッセージを更新しました: post_id={self.post_id}, message_id={message_id}")
+                        logger.info(f"メッセージを更新しました: post_id={self.post_id}, message_id={message_id}")
+                        
+                        # 非公開投稿の場合はスレッドの最初のメッセージも更新
+                        if self._is_private:
+                            try:
+                                # スレッドの場合はスレッド自体の名前も更新
+                                if hasattr(channel, 'thread') and channel.thread:
+                                    thread = channel.thread
+                                elif isinstance(channel, discord.Thread):
+                                    thread = channel
+                                else:
+                                    thread = None
+                                
+                                if thread:
+                                    preview = content[:50] + ('...' if len(content) > 50 else '')
+                                    await thread.edit(name=f"非公開投稿 - ID: {self.post_id} - {preview}")
+                                    logger.info(f"スレッド名を更新しました: post_id={self.post_id}")
+                            except Exception as e:
+                                logger.warning(f"スレッド名の更新に失敗しました: {e}")
+                        
+            except Exception as e:
+                logger.error(f"Discordメッセージの更新中にエラーが発生しました: {e}", exc_info=True)
+        
         async def _update_post_in_database(
             self, 
             conn: sqlite3.Connection, 
