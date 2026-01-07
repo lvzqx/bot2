@@ -142,5 +142,151 @@ class MessageRestore(commands.Cog):
                 ephemeral=True
             )
 
-async def setup(bot):
-    await bot.add_cog(MessageRestore(bot))
+    @app_commands.command(name="backup_database", description="データベースをバックアップします")
+    @app_commands.default_permissions(administrator=True)
+    async def backup_database(self, interaction: discord.Interaction):
+        """データベースをバックアップします"""
+        try:
+            await interaction.response.defer(ephemeral=True)
+            
+            # バックアップファイル名を作成
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = f"backup/thoughts_backup_{timestamp}.db"
+            
+            # バックアップディレクトリを作成
+            os.makedirs("backup", exist_ok=True)
+            
+            # データベースをコピー
+            with sqlite3.connect(self.db_path) as source:
+                with sqlite3.connect(backup_path) as backup:
+                    source.backup(backup)
+            
+            # バックアップ情報を記録
+            backup_info = {
+                'timestamp': timestamp,
+                'size': os.path.getsize(backup_path),
+                'original_size': os.path.getsize(self.db_path)
+            }
+            
+            await interaction.followup.send(
+                f"✅ データベースをバックアップしました。\n"
+                f"📁 バックアップファイル: {backup_path}\n"
+                f"📊 サイズ: {backup_info['size']} bytes\n"
+                f"🕐 作成時刻: {timestamp}",
+                ephemeral=True
+            )
+            
+            logger.info(f"データベースをバックアップしました: {backup_path}")
+            
+        except Exception as e:
+            logger.error(f"バックアップ中にエラーが発生しました: {e}", exc_info=True)
+            await interaction.followup.send(
+                f"❌ バックアップに失敗しました: {e}",
+                ephemeral=True
+            )
+
+    @app_commands.command(name="list_backups", description="バックアップ一覧を表示します")
+    @app_commands.default_permissions(administrator=True)
+    async def list_backups(self, interaction: discord.Interaction):
+        """バックアップ一覧を表示します"""
+        try:
+            await interaction.response.defer(ephemeral=True)
+            
+            if not os.path.exists("backup"):
+                await interaction.followup.send(
+                    "📁 バックアップはありません。",
+                    ephemeral=True
+                )
+                return
+            
+            # バックアップファイル一覧を取得
+            backup_files = []
+            for filename in os.listdir("backup"):
+                if filename.startswith("thoughts_backup_") and filename.endswith(".db"):
+                    filepath = os.path.join("backup", filename)
+                    stat = os.stat(filepath)
+                    backup_files.append({
+                        'filename': filename,
+                        'size': stat.st_size,
+                        'created': datetime.fromtimestamp(stat.st_ctime)
+                    })
+            
+            if not backup_files:
+                await interaction.followup.send(
+                    "📁 バックアップはありません。",
+                    ephemeral=True
+                )
+                return
+            
+            # 新しい順にソート
+            backup_files.sort(key=lambda x: x['created'], reverse=True)
+            
+            # 埋め込みを作成
+            embed = discord.Embed(
+                title="📁 バックアップ一覧",
+                color=discord.Color.blue()
+            )
+            
+            for backup in backup_files[:10]:  # 最大10件表示
+                created_str = backup['created'].strftime("%Y-%m-%d %H:%M:%S")
+                size_mb = backup['size'] / (1024 * 1024)
+                
+                embed.add_field(
+                    name=f"📄 {backup['filename']}",
+                    value=f"作成: {created_str}\nサイズ: {size_mb:.2f} MB",
+                    inline=False
+                )
+            
+            if len(backup_files) > 10:
+                embed.set_footer(text=f"他 {len(backup_files) - 10}件のバックアップがあります")
+            
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            
+        except Exception as e:
+            logger.error(f"バックアップ一覧取得中にエラーが発生しました: {e}", exc_info=True)
+            await interaction.followup.send(
+                f"❌ エラーが発生しました: {e}",
+                ephemeral=True
+            )
+
+    @app_commands.command(name="restore_backup", description="バックアップから復元します")
+    @app_commands.describe(backup_filename="復元するバックアップファイル名")
+    @app_commands.default_permissions(administrator=True)
+    async def restore_backup(self, interaction: discord.Interaction, backup_filename: str):
+        """バックアップから復元します"""
+        try:
+            await interaction.response.defer(ephemeral=True)
+            
+            backup_path = os.path.join("backup", backup_filename)
+            
+            if not os.path.exists(backup_path):
+                await interaction.followup.send(
+                    f"❌ バックアップファイルが見つかりません: {backup_filename}",
+                    ephemeral=True
+                )
+                return
+            
+            # 現在のデータベースをバックアップ
+            current_backup = f"backup/current_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+            os.makedirs("backup", exist_ok=True)
+            
+            with sqlite3.connect(self.db_path) as source:
+                with sqlite3.connect(current_backup) as backup:
+                    source.backup(backup)
+            
+            # バックアップから復元
+            with sqlite3.connect(backup_path) as backup:
+                with sqlite3.connect(self.db_path) as target:
+                    backup.backup(target)
+            
+            await interaction.followup.send(
+                f"✅ バックアップから復元しました。\n"
+                f"📁 復元元: {backup_filename}\n"
+                f"💾 現在のバックアップ: {os.path.basename(current_backup)}",
+                ephemeral=True
+            )
+            
+            logger.info(f"バックアップから復元しました: {backup_filename}")
+            
+        except Exception as e:
+            logger.error(f"バックアップ復元中にエラーが発生しました: {e}", exc_info=True)
