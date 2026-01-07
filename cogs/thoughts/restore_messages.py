@@ -382,3 +382,10 @@ class MessageRestore(commands.Cog):
             
         except Exception as e:
             logger.error(f"バックアップ復元中にエラーが発生しました: {e}", exc_info=True)
+            await interaction.followup.send(
+                f"❌ エラーが発生しました: {e}",
+                ephemeral=True
+            )
+
+async def setup(bot):
+    await bot.add_cog(MessageRestore(bot))
