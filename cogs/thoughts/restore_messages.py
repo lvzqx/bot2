@@ -192,9 +192,10 @@ class MessageRestore(commands.Cog):
                     # 無効な参照を削除
                     if invalid_refs:
                         invalid_post_ids = [ref[0] for ref in invalid_refs]
-                        cursor.execute("""
+                        placeholders = ','.join(['?'] * len(invalid_post_ids))
+                        cursor.execute(f"""
                             DELETE FROM message_references 
-                            WHERE post_id IN ({','.join(['?'] * len(invalid_post_ids))})
+                            WHERE post_id IN ({placeholders})
                         """, invalid_post_ids)
                         
                         conn.commit()
@@ -520,9 +521,10 @@ class MessageRestore(commands.Cog):
                 # 孤立したメッセージ参照を削除
                 if orphaned_refs:
                     orphaned_post_ids = [ref[0] for ref in orphaned_refs]
-                    cursor.execute("""
+                    placeholders = ','.join(['?'] * len(orphaned_post_ids))
+                    cursor.execute(f"""
                         DELETE FROM message_references 
-                        WHERE post_id IN ({','.join(['?'] * len(orphaned_post_ids))})
+                        WHERE post_id IN ({placeholders})
                     """, orphaned_post_ids)
                     cleanup_count += len(orphaned_refs)
                     
@@ -535,9 +537,10 @@ class MessageRestore(commands.Cog):
                 # 参照されていない投稿を削除
                 if orphaned_posts:
                     orphaned_post_ids = [post[0] for post in orphaned_posts]
-                    cursor.execute("""
+                    placeholders = ','.join(['?'] * len(orphaned_post_ids))
+                    cursor.execute(f"""
                         DELETE FROM thoughts 
-                        WHERE id IN ({','.join(['?'] * len(orphaned_post_ids))})
+                        WHERE id IN ({placeholders})
                     """, orphaned_post_ids)
                     cleanup_count += len(orphaned_posts)
                     
