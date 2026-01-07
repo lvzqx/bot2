@@ -6,6 +6,7 @@ import logging
 import os
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ class MessageRestore(commands.Cog):
     
     @app_commands.command(name="restore_messages", description="古いメッセージ参照を整理します")
     @app_commands.default_permissions(administrator=True)
+    @app_commands.checks.has_permissions(administrator=True)
     async def restore_messages(self, interaction: discord.Interaction, message_id: Optional[str] = None):
         """古いメッセージ参照を整理します"""
         try:
@@ -144,6 +146,7 @@ class MessageRestore(commands.Cog):
 
     @app_commands.command(name="backup_database", description="データベースをバックアップします")
     @app_commands.default_permissions(administrator=True)
+    @app_commands.checks.has_permissions(administrator=True)
     async def backup_database(self, interaction: discord.Interaction):
         """データベースをバックアップします"""
         try:
@@ -187,6 +190,7 @@ class MessageRestore(commands.Cog):
 
     @app_commands.command(name="list_backups", description="バックアップ一覧を表示します")
     @app_commands.default_permissions(administrator=True)
+    @app_commands.checks.has_permissions(administrator=True)
     async def list_backups(self, interaction: discord.Interaction):
         """バックアップ一覧を表示します"""
         try:
@@ -252,6 +256,7 @@ class MessageRestore(commands.Cog):
     @app_commands.command(name="restore_backup", description="バックアップから復元します")
     @app_commands.describe(backup_filename="復元するバックアップファイル名")
     @app_commands.default_permissions(administrator=True)
+    @app_commands.checks.has_permissions(administrator=True)
     async def restore_backup(self, interaction: discord.Interaction, backup_filename: str):
         """バックアップから復元します"""
         try:
