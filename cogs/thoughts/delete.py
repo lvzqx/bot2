@@ -1,26 +1,29 @@
 from __future__ import annotations
 
-import logging
 import sqlite3
+import logging
 from contextlib import contextmanager
 from typing import Optional, Tuple
 
 import discord
 from discord import app_commands
 from discord.ext import commands
+from bot import DatabaseMixin
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
 
-class Delete(commands.Cog):
+class Delete(commands.Cog, DatabaseMixin):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
+        DatabaseMixin.__init__(self)
         logger.info("Delete cog が初期化されました")
 
     @contextmanager
     def _get_db_connection(self) -> sqlite3.Connection:
         """データベース接続を取得するコンテキストマネージャ"""
-        conn = sqlite3.connect('thoughts.db')
+        # DatabaseMixin の db_path を使用
+        conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         try:
             yield conn
@@ -105,30 +108,31 @@ class Delete(commands.Cog):
         """
         try:
             with self._get_db_connection() as conn:
-                with conn:
-                    with self._get_cursor(conn) as cursor:
-                        # 投稿が存在するか確認（非公開かどうかも取得）
-                        cursor.execute('''
-                            SELECT user_id, is_private FROM thoughts 
-                            WHERE id = ?
-                        ''', (post_id,))
-                        
-                        if result := cursor.fetchone():
-                            post_owner_id, is_private = result[0], bool(result[1])
-                            # 投稿者または管理者でない場合は削除不可
-                            if str(post_owner_id) != str(user_id) and not is_admin:
-                                return False, None
-                        else:
-                            return False, None  # 投稿が見つからない
-                        
-                        # 投稿を削除（外部キー制約により関連するメッセージ参照も削除される）
-                        cursor.execute('''
-                            DELETE FROM thoughts 
-                            WHERE id = ?
-                        ''', (post_id,))
-                        
-                        # 削除された投稿が非公開かどうかを返す
-                        return cursor.rowcount > 0, is_private
+                with self._get_cursor(conn) as cursor:
+                    # 投稿が存在するか確認（非公開かどうかも取得）
+                    cursor.execute('''
+                        SELECT user_id, is_private FROM thoughts 
+                        WHERE id = ?
+                    ''', (post_id,))
+                    
+                    if result := cursor.fetchone():
+                        post_owner_id, is_private = result[0], bool(result[1])
+                        # 投稿者または管理者でない場合は削除不可
+                        if str(post_owner_id) != str(user_id) and not is_admin:
+                            return False, None
+                    else:
+                        return False, None  # 投稿が見つからない
+                    
+                    # 投稿を削除（外部キー制約により関連するメッセージ参照も削除される）
+                    cursor.execute('''
+                        DELETE FROM thoughts 
+                        WHERE id = ?
+                    ''', (post_id,))
+                    
+                    conn.commit()
+                    
+                    # 削除された投稿が非公開かどうかを返す
+                    return cursor.rowcount > 0, is_private
         except sqlite3.Error as e:
             logger.error(f"投稿の削除中にエラーが発生しました: {e}")
             return False, None
@@ -208,11 +212,18 @@ class Delete(commands.Cog):
                                     ephemeral=True
                                 )
                                 return
-                except Exception as e:
-                    logger.error(f"データベース検索中にエラーが発生しました: {e}", exc_info=True)
-                    logger.error(f"エラーの詳細: {type(e).__name__}: {str(e)}")
+                except sqlite3.Error as e:
+                    logger.error(f"SQLiteエラーが発生しました: {e}", exc_info=True)
+                    logger.error(f"データベースパス: {self.db_path}")
                     await interaction.followup.send(
-                        "❌ データベース検索中にエラーが発生しました。管理者にお問い合わせください。",
+                        "❌ データベースエラーが発生しました。管理者にお問い合わせください。",
+                        ephemeral=True
+                    )
+                    return
+                except Exception as e:
+                    logger.error(f"予期せぬエラーが発生しました: {e}", exc_info=True)
+                    await interaction.followup.send(
+                        "❌ 予期せぬエラーが発生しました。管理者にお問い合わせください。",
                         ephemeral=True
                     )
                     return

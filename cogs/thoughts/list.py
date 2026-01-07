@@ -9,6 +9,7 @@ from datetime import datetime
 import discord
 from discord import app_commands, ui, Interaction, Embed, File
 from discord.ext import commands
+from bot import DatabaseMixin
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 # 型定義
 PostData = Dict[str, Any]  # 投稿データの型
 
-class List(commands.Cog):
+class List(commands.Cog, DatabaseMixin):
     """投稿一覧を表示するためのCog"""
     
     def __init__(self, bot: commands.Bot) -> None:
@@ -26,6 +27,7 @@ class List(commands.Cog):
             bot: Discord Bot インスタンス
         """
         self.bot: commands.Bot = bot
+        DatabaseMixin.__init__(self)
         logger.info("List cog が初期化されました")
     
     @contextmanager
@@ -40,7 +42,7 @@ class List(commands.Cog):
         """
         conn = None
         try:
-            conn = sqlite3.connect('thoughts.db')
+            conn = sqlite3.connect(self.db_path)
             conn.execute("PRAGMA foreign_keys = ON")
             conn.execute("PRAGMA journal_mode = WAL")
             conn.execute("PRAGMA synchronous = NORMAL")

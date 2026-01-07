@@ -3,12 +3,13 @@ from __future__ import annotations
 import logging
 import sqlite3
 from contextlib import contextmanager
-from typing import List, Dict, Any, Optional, Tuple, Union
+from typing import List, Dict, Any, Optional, Tuple, Union, Iterator
 from datetime import datetime
 
 import discord
 from discord import app_commands, ui, Interaction, Embed, File
 from discord.ext import commands
+from bot import DatabaseMixin
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -20,12 +21,13 @@ ITEMS_PER_PAGE = 3  # 1ページあたりの表示数
 # 型定義
 PostData = Dict[str, Any]  # 投稿データの型
 
-class Search(commands.Cog):
+class Search(commands.Cog, DatabaseMixin):
     """投稿検索機能を提供するCog"""
     
     def __init__(self, bot: commands.Bot) -> None:
         """Search Cog を初期化します。"""
         self.bot: commands.Bot = bot
+        DatabaseMixin.__init__(self)
         logger.info("Search cog が初期化されました")
     
     @contextmanager
@@ -33,7 +35,7 @@ class Search(commands.Cog):
         """データベース接続を取得するコンテキストマネージャー"""
         conn = None
         try:
-            conn = sqlite3.connect('thoughts.db')
+            conn = sqlite3.connect(self.db_path)
             conn.execute("PRAGMA foreign_keys = ON")
             conn.execute("PRAGMA journal_mode = WAL")
             conn.execute("PRAGMA synchronous = NORMAL")

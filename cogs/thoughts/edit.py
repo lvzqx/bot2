@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 import discord
 from discord import app_commands, ui, Interaction, Embed, ButtonStyle
 from discord.ext import commands
+from bot import DatabaseMixin  # Added DatabaseMixin import
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ class PostData(TypedDict):
     created_at: Optional[str]
     updated_at: Optional[str]
 
-class Edit(commands.Cog):
+class Edit(commands.Cog, DatabaseMixin):
     """投稿編集機能を提供するCog
     
     Attributes:
@@ -46,6 +47,7 @@ class Edit(commands.Cog):
             bot: Discord Bot インスタンス
         """
         self.bot: commands.Bot = bot
+        DatabaseMixin.__init__(self)
         logger.info("Edit cog が初期化されました")
     
     @contextmanager
@@ -56,7 +58,7 @@ class Edit(commands.Cog):
             sqlite3.Connection: データベース接続
         """
         try:
-            conn = sqlite3.connect('thoughts.db')
+            conn = sqlite3.connect(self.db_path)
             conn.row_factory = sqlite3.Row
             conn.execute("PRAGMA foreign_keys = ON")
             yield conn
@@ -192,7 +194,7 @@ class Edit(commands.Cog):
                 sqlite3.Connection: データベース接続
             """
             try:
-                conn = sqlite3.connect('thoughts.db')
+                conn = sqlite3.connect(self.bot.db_path)
                 conn.row_factory = sqlite3.Row
                 conn.execute("PRAGMA foreign_keys = ON")
                 yield conn
