@@ -20,6 +20,10 @@ class MessageRestore(commands.Cog):
     @app_commands.command(name="restore_messages", description="古いメッセージ参照を整理します")
     @app_commands.default_permissions(administrator=True)
     @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(
+        message_id="対象のメッセージID（省略可）",
+        action="アクション（check/delete/resend、省略可）"
+    )
     async def restore_messages(self, interaction: discord.Interaction, message_id: Optional[str] = None, action: Optional[str] = None):
         """古いメッセージ参照を整理します"""
         try:
