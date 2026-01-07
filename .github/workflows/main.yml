@@ -68,16 +68,6 @@ jobs:
           fi
         fi
     
-    - name: Download database from cache
-      run: |
-        echo "キャッシュからデータベースを復元します..."
-        # キャッシュがあれば使用、なければ既存のまま
-        if [ -f "data/thoughts.db" ]; then
-          echo "既存のデータベースを維持します"
-        else
-          echo "キャッシュからデータベースを復元します"
-        fi
-    
     - name: Check if bot is running
       id: check_bot
       env:
@@ -147,13 +137,6 @@ jobs:
           # 1分ごとにチェック
           sleep 60
         done
-    
-    - name: Save database to cache
-      if: always()
-      uses: actions/cache@v3
-      with:
-        path: data/
-        key: bot-db-main
     
     - name: Commit database changes
       if: always()
