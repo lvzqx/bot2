@@ -173,11 +173,40 @@ class Delete(commands.Cog):
             # メッセージデータを取得
             message_data = await self._get_message_data(message_id)
             if not message_data:
-                await interaction.followup.send(
-                    "❌ メッセージが見つかりませんでした。正しいメッセージIDを入力してください。",
-                    ephemeral=True
-                )
-                return
+                # メッセージ参照が見つからない場合、データベースを直接検索
+                try:
+                    with self._get_db_connection() as conn:
+                        with self._get_cursor(conn) as cursor:
+                            # thoughtsテーブルから直接検索
+                            cursor.execute('''
+                                SELECT id, user_id, is_private
+                                FROM thoughts 
+                                WHERE CAST(id AS TEXT) = ?
+                            ''', (str(message_id),))
+                            
+                            row = cursor.fetchone()
+                            if row:
+                                # 投稿は存在するがメッセージ参照がない場合
+                                await interaction.followup.send(
+                                    "❌ この投稿のメッセージ参照が見つかりません。ボットの再起動によりメッセージが失われた可能性があります。\n"
+                                    "投稿IDを指定して削除するか、/restore_messages で古い参照を整理してください。",
+                                    ephemeral=True
+                                )
+                                return
+                            else:
+                                # 投稿自体が存在しない場合
+                                await interaction.followup.send(
+                                    "❌ 指定された投稿が見つかりませんでした。",
+                                    ephemeral=True
+                                )
+                                return
+                except Exception as e:
+                    logger.error(f"データベース検索中にエラーが発生しました: {e}")
+                    await interaction.followup.send(
+                        "❌ エラーが発生しました。しばらくしてからもう一度お試しください。",
+                        ephemeral=True
+                    )
+                    return
             
             # 管理者権限を確認
             is_admin = interaction.user.guild_permissions.administrator
@@ -292,8 +321,21 @@ class Delete(commands.Cog):
                     )
                 except discord.NotFound:
                     logger.warning(f"メッセージが見つかりません: {message_data['message_id']}")
+                    # メッセージが見つからない場合、データベースから参照を削除
+                    try:
+                        with self._get_db_connection() as conn:
+                            with self._get_cursor(conn) as cursor:
+                                cursor.execute("""
+                                    DELETE FROM message_references 
+                                    WHERE post_id = ?
+                                """, (post_id,))
+                                conn.commit()
+                        logger.info(f"無効なメッセージ参照を削除しました: {post_id}")
+                    except Exception as e:
+                        logger.error(f"メッセージ参照の削除中にエラーが発生しました: {e}")
+                    
                     await interaction.followup.send(
-                        "✅ 投稿は既に削除されています。",
+                        "✅ 投稿は既に削除されています。（古いメッセージ参照を整理しました）",
                         ephemeral=True
                     )
                 except discord.Forbidden:
