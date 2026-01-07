@@ -388,5 +388,187 @@ class MessageRestore(commands.Cog):
                 ephemeral=True
             )
 
+    @app_commands.command(name="check_database", description="データベースの整合性をチェックします")
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.checks.has_permissions(administrator=True)
+    async def check_database(self, interaction: discord.Interaction):
+        """データベースの整合性をチェックします"""
+        try:
+            await interaction.response.defer(ephemeral=True)
+            
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # データベースの基本情報を取得
+                cursor.execute('SELECT COUNT(*) FROM thoughts')
+                thoughts_count = cursor.fetchone()[0]
+                
+                cursor.execute('SELECT COUNT(*) FROM message_references')
+                refs_count = cursor.fetchone()[0]
+                
+                # 孤立したメッセージ参照を検出
+                cursor.execute("""
+                    SELECT COUNT(*)
+                    FROM message_references mr
+                    LEFT JOIN thoughts t ON mr.post_id = t.id
+                    WHERE t.id IS NULL
+                """)
+                orphaned_refs_count = cursor.fetchone()[0]
+                
+                # 参照されていない投稿を検出
+                cursor.execute("""
+                    SELECT COUNT(*)
+                    FROM thoughts t
+                    LEFT JOIN message_references mr ON t.id = mr.post_id
+                    WHERE mr.post_id IS NULL
+                """)
+                orphaned_posts_count = cursor.fetchone()[0]
+                
+                # データベースファイルのサイズを取得
+                db_size = os.path.getsize(self.db_path)
+                db_size_mb = db_size / (1024 * 1024)
+                
+                # 埋め込みを作成
+                embed = discord.Embed(
+                    title="🔍 データベース整合性チェック",
+                    color=discord.Color.blue()
+                )
+                
+                embed.add_field(
+                    name="📊 基本情報",
+                    value=f"📝 投稿数: {thoughts_count}\n"
+                          f"🔗 メッセージ参照数: {refs_count}\n"
+                          f"💾 データベースサイズ: {db_size_mb:.2f} MB",
+                    inline=False
+                )
+                
+                # 問題の有無をチェック
+                issues = []
+                if orphaned_refs_count > 0:
+                    issues.append(f"🗑️ 孤立したメッセージ参照: {orphaned_refs_count}件")
+                
+                if orphaned_posts_count > 0:
+                    issues.append(f"📝 参照されていない投稿: {orphaned_posts_count}件")
+                
+                if issues:
+                    embed.add_field(
+                        name="⚠️ 検出された問題",
+                        value="\n".join(issues),
+                        inline=False
+                    )
+                    embed.color = discord.Color.orange()
+                    
+                    embed.add_field(
+                        name="🔧 推奨されるアクション",
+                        value="\n".join([
+                            "• /cleanup_orphaned - 孤立したデータをクリーンアップ",
+                            "• /backup_database - 現在の状態をバックアップ",
+                            "• /restore_messages - メッセージ参照を整理"
+                        ]),
+                        inline=False
+                    )
+                else:
+                    embed.add_field(
+                        name="✅ 状態",
+                        value="データベースは健全です。問題は検出されませんでした。",
+                        inline=False
+                    )
+                    embed.color = discord.Color.green()
+                
+                await interaction.followup.send(embed=embed, ephemeral=True)
+                
+                logger.info(f"データベース整合性チェック完了: 投稿{thoughts_count}件, 参照{refs_count}件, 問題{len(issues)}件")
+                
+        except Exception as e:
+            logger.error(f"データベースチェック中にエラーが発生しました: {e}", exc_info=True)
+            await interaction.followup.send(
+                f"❌ エラーが発生しました: {e}",
+                ephemeral=True
+            )
+
+    @app_commands.command(name="cleanup_orphaned", description="孤立した参照をクリーンアップします")
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.checks.has_permissions(administrator=True)
+    async def cleanup_orphaned(self, interaction: discord.Interaction):
+        """孤立した参照をクリーンアップします"""
+        try:
+            await interaction.response.defer(ephemeral=True)
+            
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # 孤立したメッセージ参照を検出
+                cursor.execute("""
+                    SELECT mr.post_id, mr.message_id, mr.channel_id
+                    FROM message_references mr
+                    LEFT JOIN thoughts t ON mr.post_id = t.id
+                    WHERE t.id IS NULL
+                """)
+                orphaned_refs = cursor.fetchall()
+                
+                # 参照されていない投稿を検出
+                cursor.execute("""
+                    SELECT t.id, t.content, t.created_at
+                    FROM thoughts t
+                    LEFT JOIN message_references mr ON t.id = mr.post_id
+                    WHERE mr.post_id IS NULL
+                """)
+                orphaned_posts = cursor.fetchall()
+                
+                cleanup_count = 0
+                
+                # 孤立したメッセージ参照を削除
+                if orphaned_refs:
+                    orphaned_post_ids = [ref[0] for ref in orphaned_refs]
+                    cursor.execute("""
+                        DELETE FROM message_references 
+                        WHERE post_id IN ({','.join(['?'] * len(orphaned_post_ids))})
+                    """, orphaned_post_ids)
+                    cleanup_count += len(orphaned_refs)
+                    
+                    await interaction.followup.send(
+                        f"🗑️ {len(orphaned_refs)}件の孤立したメッセージ参照を削除しました。\n"
+                        f"📊 削除された参照: {', '.join([str(ref[0]) for ref in orphaned_refs[:5]])}{'...' if len(orphaned_refs) > 5 else ''}",
+                        ephemeral=True
+                    )
+                
+                # 参照されていない投稿を削除
+                if orphaned_posts:
+                    orphaned_post_ids = [post[0] for post in orphaned_posts]
+                    cursor.execute("""
+                        DELETE FROM thoughts 
+                        WHERE id IN ({','.join(['?'] * len(orphaned_post_ids))})
+                    """, orphaned_post_ids)
+                    cleanup_count += len(orphaned_posts)
+                    
+                    await interaction.followup.send(
+                        f"🗑️ {len(orphaned_posts)}件の参照されていない投稿を削除しました。\n"
+                        f"📝 削除された投稿ID: {', '.join([str(post[0]) for post in orphaned_posts[:5]])}{'...' if len(orphaned_posts) > 5 else ''}",
+                        ephemeral=True
+                    )
+                
+                if not orphaned_refs and not orphaned_posts:
+                    await interaction.followup.send(
+                        "✅ 孤立したデータはありません。データベースはクリーンです。",
+                        ephemeral=True
+                    )
+                
+                if cleanup_count > 0:
+                    conn.commit()
+                    await interaction.followup.send(
+                        f"✅ クリーンアップが完了しました。\n"
+                        f"🧹 合計 {cleanup_count}件の不要なデータを削除しました。",
+                        ephemeral=True
+                    )
+                    
+                    logger.info(f"クリーンアップ完了: {cleanup_count}件の不要なデータを削除")
+                
+        except Exception as e:
+            logger.error(f"クリーンアップ中にエラーが発生しました: {e}", exc_info=True)
+            await interaction.followup.send(
+                f"❌ エラーが発生しました: {e}",
+                ephemeral=True
+            )
+
 async def setup(bot):
     await bot.add_cog(MessageRestore(bot))
