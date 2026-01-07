@@ -42,6 +42,19 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git pull origin main || true
+        
+        # コンフリクト解消
+        if [ -f "thoughts.db" ] && [ -f "data/thoughts.db" ]; then
+          echo "データベースのコンフリクトを検出、マージします"
+          cp thoughts.db data/thoughts.db.backup
+          # より新しいファイルを使用
+          if [ "data/thoughts.db" -nt "thoughts.db" ]; then
+            echo "data/thoughts.db を使用します"
+          else
+            echo "thoughts.db を data/ にコピーします"
+            cp thoughts.db data/
+          fi
+        fi
     
     - name: Check if database exists
       run: |
@@ -149,13 +162,32 @@ jobs:
           # 元の場所にもコピー
           cp data/thoughts.db thoughts.db
           
-          git add data/thoughts.db thoughts.db
-          
           # 変更があるかチェック
-          if ! git diff --cached --quiet; then
-            git commit -m "🗄️ Update database - $(date '+%Y-%m-%d %H:%M:%S')"
-            git push origin main
-            echo "✅ データベースをコミットしました"
+          if ! git diff --quiet data/thoughts.db thoughts.db; then
+            git add data/thoughts.db thoughts.db
+            
+            # コミットをリトライ
+            for i in {1..3}; do
+              if git commit -m "🗄️ Update database - $(date '+%Y-%m-%d %H:%M:%S')"; then
+                echo "✅ データベースをコミットしました (試行 $i)"
+                break
+              else
+                echo "⚠️ コミット失敗、リトライします (試行 $i/3)"
+                git pull --rebase origin main || true
+                sleep 5
+              fi
+            done
+            
+            # プッシュをリトライ
+            for i in {1..3}; do
+              if git push origin main; then
+                echo "✅ データベースをプッシュしました (試行 $i)"
+                break
+              else
+                echo "⚠️ プッシュ失敗、リトライします (試行 $i/3)"
+                sleep 10
+              fi
+            done
           else
             echo "ℹ️ データベースに変更はありません"
           fi
