@@ -5,7 +5,8 @@ on:
     branches: [ main ]
   workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *'  # 6時間ごとにチェック
+    - cron: '0 */6 * * *'  # 6時間ごとにチェック（UTC）
+    - cron: '0 0,6,12,18 * * *'  # 日本時間0時、6時、12時、18時（UTC-9）
 
 jobs:
   run-bot:
@@ -21,6 +22,11 @@ jobs:
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         fetch-depth: 0
+    
+    - name: Set timezone to Japan
+      run: |
+        sudo timedatectl set-timezone Asia/Tokyo
+        date
     
     - name: Set up Python
       uses: actions/setup-python@v4
