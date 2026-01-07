@@ -5,7 +5,7 @@ on:
     branches: [ main ]
   workflow_dispatch:
   schedule:
-    - cron: '*/5 * * * *'  # 5分ごとにチェック
+    - cron: '0 */6 * * *'  # 6時間ごとにチェック
 
 jobs:
   run-bot:
@@ -50,18 +50,33 @@ jobs:
           echo "既存のデータベースを使用します"
           mkdir -p data
           cp thoughts.db data/
+          echo "既存データベースを data/ にコピーしました"
         else
           echo "新規のデータベースを作成します"
           mkdir -p data
+          echo "空のデータベースファイルを作成します"
+          touch data/thoughts.db
+        fi
+        
+        # データベースの状態を確認
+        if [ -f "data/thoughts.db" ]; then
+          echo "データベースファイルサイズ: $(wc -c < data/thoughts.db) bytes"
+          if [ -s "data/thoughts.db" ]; then
+            echo "データベースは空ではありません"
+          else
+            echo "データベースは空です"
+          fi
         fi
     
     - name: Download database from cache
-      uses: actions/cache@v3
-      with:
-        path: data/
-        key: bot-db-main
-        restore-keys: |
-          bot-db-main
+      run: |
+        echo "キャッシュからデータベースを復元します..."
+        # キャッシュがあれば使用、なければ既存のまま
+        if [ -f "data/thoughts.db" ]; then
+          echo "既存のデータベースを維持します"
+        else
+          echo "キャッシュからデータベースを復元します"
+        fi
     
     - name: Check if bot is running
       id: check_bot
