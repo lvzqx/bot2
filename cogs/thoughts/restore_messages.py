@@ -20,7 +20,7 @@ class MessageRestore(commands.Cog):
     @app_commands.command(name="restore_messages", description="古いメッセージ参照を整理します")
     @app_commands.default_permissions(administrator=True)
     @app_commands.checks.has_permissions(administrator=True)
-    async def restore_messages(self, interaction: discord.Interaction, message_id: Optional[str] = None):
+    async def restore_messages(self, interaction: discord.Interaction, message_id: Optional[str] = None, action: Optional[str] = None):
         """古いメッセージ参照を整理します"""
         try:
             await interaction.response.defer(ephemeral=True)
@@ -28,10 +28,10 @@ class MessageRestore(commands.Cog):
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
-                if message_id:
+                if message_id and action:
                     # 特定のメッセージIDをチェック
                     cursor.execute("""
-                        SELECT mr.post_id, mr.message_id, mr.channel_id, t.created_at
+                        SELECT mr.post_id, mr.message_id, mr.channel_id, t.content, t.category, t.is_anonymous, t.is_private, t.user_id
                         FROM message_references mr
                         JOIN thoughts t ON mr.post_id = t.id
                         WHERE CAST(mr.message_id AS TEXT) = ?
@@ -46,18 +46,37 @@ class MessageRestore(commands.Cog):
                         )
                         return
                     
-                    post_id, msg_id, channel_id, created_at = ref
+                    post_id, msg_id, channel_id, content, category, is_anonymous, is_private, user_id = ref
                     
-                    try:
-                        # チャンネルを取得してメッセージが存在するか確認
-                        channel = await interaction.guild.fetch_channel(int(channel_id))
-                        await channel.fetch_message(int(msg_id))
-                        await interaction.followup.send(
-                            f"✅ メッセージID {message_id} は有効です。",
-                            ephemeral=True
-                        )
-                    except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-                        # メッセージが見つからない場合、参照を削除
+                    if action == "check":
+                        try:
+                            # チャンネルを取得してメッセージが存在するか確認
+                            channel = await interaction.guild.fetch_channel(int(channel_id))
+                            message = await channel.fetch_message(int(msg_id))
+                            await interaction.followup.send(
+                                f"✅ メッセージID {message_id} は有効です。\n"
+                                f"📝 内容: {content[:50]}{'...' if len(content) > 50 else ''}\n"
+                                f"📁 チャンネル: {channel.name}\n"
+                                f"🕐 作成時刻: {message.created_at.strftime('%Y-%m-%d %H:%M:%S')}",
+                                ephemeral=True
+                            )
+                        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                            # メッセージが見つからない場合
+                            await interaction.followup.send(
+                                f"❌ メッセージID {message_id} は無効です。\n"
+                                f"📝 投稿内容: {content[:100]}{'...' if len(content) > 100 else ''}\n"
+                                f"🗑️ 参照を削除するには: /restore_messages {message_id} delete",
+                                ephemeral=True
+                            )
+                        except Exception as e:
+                            logger.warning(f"メッセージ確認中にエラー: {e}")
+                            await interaction.followup.send(
+                                f"⚠️ メッセージ確認中にエラーが発生しました: {e}",
+                                ephemeral=True
+                            )
+                    
+                    elif action == "delete":
+                        # 参照を削除
                         cursor.execute("""
                             DELETE FROM message_references 
                             WHERE post_id = ?
@@ -66,14 +85,70 @@ class MessageRestore(commands.Cog):
                         conn.commit()
                         
                         await interaction.followup.send(
-                            f"✅ メッセージID {message_id} の無効な参照を削除しました。\n"
-                            f"投稿ID: {post_id}, チャンネルID: {channel_id}",
+                            f"✅ メッセージID {message_id} の参照を削除しました。\n"
+                            f"📝 投稿内容: {content[:100]}{'...' if len(content) > 100 else ''}\n"
+                            f"🗑️ 投稿ID: {post_id}",
                             ephemeral=True
                         )
-                    except Exception as e:
-                        logger.warning(f"メッセージ確認中にエラー: {e}")
+                        
+                        logger.info(f"メッセージ参照を削除しました: {message_id}")
+                    
+                    elif action == "resend":
+                        # メッセージを再送信
+                        try:
+                            # 投稿者情報を取得
+                            member = await interaction.guild.fetch_member(user_id)
+                            display_name = member.display_name if member else f"ユーザー{user_id}"
+                            
+                            # 埋め込みメッセージを作成
+                            embed = discord.Embed(
+                                description=content,
+                                color=discord.Color.blue()
+                            )
+                            
+                            # 表示名を設定
+                            if is_anonymous:
+                                embed.set_author(name='匿名')
+                            else:
+                                embed.set_author(
+                                    name=display_name,
+                                    icon_url=member.display_avatar.url if member else None
+                                )
+                            
+                            # フッターにカテゴリーと投稿IDを表示
+                            embed.set_footer(text=f'カテゴリー: {category or "未設定"} | ID: {post_id}')
+                            
+                            # チャンネルに送信
+                            channel = await interaction.guild.fetch_channel(int(channel_id))
+                            new_message = await channel.send(embed=embed)
+                            
+                            # 新しいメッセージ参照を更新
+                            cursor.execute("""
+                                UPDATE message_references 
+                                SET message_id = ?
+                                WHERE post_id = ?
+                            """, (str(new_message.id), post_id))
+                            
+                            conn.commit()
+                            
+                            await interaction.followup.send(
+                                f"✅ メッセージID {message_id} を再送信しました。\n"
+                                f"🔗 新しいメッセージID: {new_message.id}\n"
+                                f"📁 チャンネル: {channel.name}",
+                                ephemeral=True
+                            )
+                            
+                            logger.info(f"メッセージを再送信しました: {message_id} -> {new_message.id}")
+                            
+                        except Exception as e:
+                            logger.error(f"メッセージ再送信中にエラーが発生しました: {e}", exc_info=True)
+                            await interaction.followup.send(
+                                f"❌ メッセージの再送信に失敗しました: {e}",
+                                ephemeral=True
+                            )
+                    else:
                         await interaction.followup.send(
-                            f"⚠️ メッセージ確認中にエラーが発生しました: {e}",
+                            f"⚠️ 不正なアクションです。使用可能なアクション: check, delete, resend",
                             ephemeral=True
                         )
                 else:
@@ -123,7 +198,11 @@ class MessageRestore(commands.Cog):
                         await interaction.followup.send(
                             f"✅ {len(invalid_refs)}件の無効なメッセージ参照を削除しました。\n"
                             f"📊 有効な参照: {len(valid_refs)}件\n"
-                            f"🗑️ 削除された参照: {len(invalid_refs)}件",
+                            f"🗑️ 削除された参照: {len(invalid_refs)}件\n\n"
+                            f"💡 個別に操作するには:\n"
+                            f"/restore_messages <message_id> check - メッセージを確認\n"
+                            f"/restore_messages <message_id> delete - 参照を削除\n"
+                            f"/restore_messages <message_id> resend - メッセージを再送信",
                             ephemeral=True
                         )
                         
@@ -133,7 +212,11 @@ class MessageRestore(commands.Cog):
                             await interaction.followup.send(f"削除された参照:\n{details}", ephemeral=True)
                     else:
                         await interaction.followup.send(
-                            f"✅ すべてのメッセージ参照は有効です。（{len(valid_refs)}件）",
+                            f"✅ すべてのメッセージ参照は有効です。（{len(valid_refs)}件）\n\n"
+                            f"💡 個別に操作するには:\n"
+                            f"/restore_messages <message_id> check - メッセージを確認\n"
+                            f"/restore_messages <message_id> delete - 参照を削除\n"
+                            f"/restore_messages <message_id> resend - メッセージを再送信",
                             ephemeral=True
                         )
                 
