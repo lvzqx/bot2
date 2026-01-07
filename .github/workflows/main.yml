@@ -43,6 +43,18 @@ jobs:
         git config --local user.name "GitHub Action"
         git pull origin main || true
     
+    - name: Check if database exists
+      run: |
+        # 既存のデータベースがあればそれを使用
+        if [ -f "thoughts.db" ]; then
+          echo "既存のデータベースを使用します"
+          mkdir -p data
+          cp thoughts.db data/
+        else
+          echo "新規のデータベースを作成します"
+          mkdir -p data
+        fi
+    
     - name: Download database from cache
       uses: actions/cache@v3
       with:
@@ -136,7 +148,10 @@ jobs:
         
         # データベースが存在し、変更がある場合のみコミット
         if [ -f "data/thoughts.db" ]; then
-          git add data/thoughts.db
+          # 元の場所にもコピー
+          cp data/thoughts.db thoughts.db
+          
+          git add data/thoughts.db thoughts.db
           
           # 変更があるかチェック
           if ! git diff --cached --quiet; then
