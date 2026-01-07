@@ -753,15 +753,14 @@ class Edit(commands.Cog, DatabaseMixin):
             # post_idが指定されている場合は直接編集モーダルを表示
             if post_id is not None:
                 # データベースから投稿を取得
-                with sqlite3.connect('thoughts.db') as conn:
-                    conn.row_factory = sqlite3.Row
-                    cursor = conn.cursor()
-                    cursor.execute('''
-                        SELECT content, category, image_url, is_anonymous, is_private, user_id
-                        FROM thoughts 
-                        WHERE id = ?
-                    ''', (post_id,))
-                    post = cursor.fetchone()
+                with self._get_db_connection() as conn:
+                    with self._get_cursor(conn) as cursor:
+                        cursor.execute('''
+                            SELECT content, category, image_url, is_anonymous, is_private, user_id
+                            FROM thoughts 
+                            WHERE id = ?
+                        ''', (post_id,))
+                        post = cursor.fetchone()
                 
                 if not post:
                     await interaction.response.send_message("❌ 指定された投稿が見つかりません。", ephemeral=True)
@@ -824,3 +823,4 @@ class Edit(commands.Cog, DatabaseMixin):
 
 async def setup(bot):
     await bot.add_cog(Edit(bot))
+
