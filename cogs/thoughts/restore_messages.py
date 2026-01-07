@@ -240,7 +240,7 @@ class MessageRestore(commands.Cog):
             await interaction.response.defer(ephemeral=True)
             
             # バックアップファイル名を作成
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             backup_path = f"backup/thoughts_backup_{timestamp}.db"
             
             # バックアップディレクトリを作成
@@ -255,14 +255,15 @@ class MessageRestore(commands.Cog):
             backup_info = {
                 'timestamp': timestamp,
                 'size': os.path.getsize(backup_path),
-                'original_size': os.path.getsize(self.db_path)
+                'original_size': os.path.getsize(self.db_path),
+                'readable_time': datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
             }
             
             await interaction.followup.send(
                 f"✅ データベースをバックアップしました。\n"
                 f"📁 バックアップファイル: {backup_path}\n"
                 f"📊 サイズ: {backup_info['size']} bytes\n"
-                f"🕐 作成時刻: {timestamp}",
+                f"🕐 作成時刻: {backup_info['readable_time']}",
                 ephemeral=True
             )
             
