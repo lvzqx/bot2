@@ -101,6 +101,18 @@ class DatabaseMixin:
             raise
         finally:
             conn.close()
+    
+    @contextlib.contextmanager
+    def _get_cursor(self, conn):
+        """カーソルを取得するコンテキストマネージャ"""
+        cursor = conn.cursor()
+        try:
+            yield cursor
+        except Exception as e:
+            logger.error(f"カーソルエラー: {e}")
+            raise
+        finally:
+            cursor.close()
 
 class ThoughtBot(commands.Bot, DatabaseMixin):
     """メインボットクラス"""
