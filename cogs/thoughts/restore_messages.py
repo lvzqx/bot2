@@ -1,6 +1,7 @@
 import sqlite3
 import discord
 from discord.ext import commands
+from discord import app_commands
 import logging
 import os
 from dotenv import load_dotenv
@@ -15,9 +16,9 @@ class MessageRestore(commands.Cog):
         self.bot = bot
         self.db_path = os.getenv('DB_PATH', 'thoughts.db')
     
-    @commands.command(name="restore_messages", description="古いメッセージ参照を整理します")
-    @commands.has_permissions(administrator=True)
-    async def restore_messages(self, ctx):
+    @app_commands.command(name="restore_messages", description="古いメッセージ参照を整理します")
+    @app_commands.default_permissions(administrator=True)
+    async def restore_messages(self, interaction: discord.Interaction):
         """古いメッセージ参照を整理します"""
         try:
             # 7日以上前のメッセージ参照を削除
@@ -38,7 +39,7 @@ class MessageRestore(commands.Cog):
                 old_refs = cursor.fetchall()
                 
                 if not old_refs:
-                    await ctx.send("✅ 整理対象のメッセージ参照はありません。")
+                    await interaction.response.send_message("✅ 整理対象のメッセージ参照はありません。")
                     return
                 
                 # 古い参照を削除
@@ -52,16 +53,16 @@ class MessageRestore(commands.Cog):
                 
                 conn.commit()
                 
-                await ctx.send(f"✅ {len(old_refs)}件の古いメッセージ参照を整理しました。")
+                await interaction.response.send_message(f"✅ {len(old_refs)}件の古いメッセージ参照を整理しました。")
                 
                 # 詳細を表示
                 if len(old_refs) <= 10:
                     details = "\n".join([f"• ID: {ref[0]} ({ref[2]})" for ref in old_refs])
-                    await ctx.send(f"削除された参照:\n{details}")
+                    await interaction.followup.send(f"削除された参照:\n{details}")
                 
         except Exception as e:
             logger.error(f"メッセージ整理中にエラーが発生しました: {e}", exc_info=True)
-            await ctx.send(f"❌ エラーが発生しました: {e}")
+            await interaction.response.send_message(f"❌ エラーが発生しました: {e}")
 
 async def setup(bot):
     await bot.add_cog(MessageRestore(bot))
