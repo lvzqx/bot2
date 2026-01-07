@@ -172,12 +172,16 @@ class Delete(commands.Cog):
         try:
             # メッセージデータを取得
             message_data = await self._get_message_data(message_id)
+            logger.info(f"メッセージデータ取得結果: {message_data}")
+            
             if not message_data:
                 # メッセージ参照が見つからない場合、データベースを直接検索
+                logger.info(f"メッセージ参照が見つからないため、データベースを直接検索します: {message_id}")
                 try:
                     with self._get_db_connection() as conn:
                         with self._get_cursor(conn) as cursor:
                             # thoughtsテーブルから直接検索
+                            logger.info(f"SQLクエリを実行します: message_id={message_id}")
                             cursor.execute('''
                                 SELECT id, user_id, is_private
                                 FROM thoughts 
@@ -185,8 +189,11 @@ class Delete(commands.Cog):
                             ''', (str(message_id),))
                             
                             row = cursor.fetchone()
+                            logger.info(f"検索結果: {row}")
+                            
                             if row:
                                 # 投稿は存在するがメッセージ参照がない場合
+                                logger.info(f"投稿は存在しますがメッセージ参照がありません: {row}")
                                 await interaction.followup.send(
                                     "❌ この投稿のメッセージ参照が見つかりません。ボットの再起動によりメッセージが失われた可能性があります。\n"
                                     "投稿IDを指定して削除するか、/restore_messages で古い参照を整理してください。",
@@ -195,15 +202,17 @@ class Delete(commands.Cog):
                                 return
                             else:
                                 # 投稿自体が存在しない場合
+                                logger.info(f"投稿が存在しません: {message_id}")
                                 await interaction.followup.send(
                                     "❌ 指定された投稿が見つかりませんでした。",
                                     ephemeral=True
                                 )
                                 return
                 except Exception as e:
-                    logger.error(f"データベース検索中にエラーが発生しました: {e}")
+                    logger.error(f"データベース検索中にエラーが発生しました: {e}", exc_info=True)
+                    logger.error(f"エラーの詳細: {type(e).__name__}: {str(e)}")
                     await interaction.followup.send(
-                        "❌ エラーが発生しました。しばらくしてからもう一度お試しください。",
+                        "❌ データベース検索中にエラーが発生しました。管理者にお問い合わせください。",
                         ephemeral=True
                     )
                     return
