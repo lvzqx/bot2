@@ -34,8 +34,8 @@ jobs:
     
     - name: Setup database directory
       run: |
-        mkdir -p data
-        chmod 755 data
+        mkdir -p data backup
+        chmod 755 data backup
     
     - name: Pull latest database
       run: |
@@ -43,17 +43,33 @@ jobs:
         git config --local user.name "GitHub Action"
         git pull origin main || true
         
+        # バックアップを作成
+        if [ -f "data/thoughts.db" ]; then
+          echo "既存のデータベースをバックアップします"
+          cp data/thoughts.db data/thoughts.db.backup.$(date +%Y%m%d_%H%M%S)
+        fi
+        
         # コンフリクト解消
         if [ -f "thoughts.db" ] && [ -f "data/thoughts.db" ]; then
           echo "データベースのコンフリクトを検出、マージします"
-          cp thoughts.db data/thoughts.db.backup
           # より新しいファイルを使用
           if [ "data/thoughts.db" -nt "thoughts.db" ]; then
-            echo "data/thoughts.db を使用します"
+            echo "data/thoughts.db を使用します（より新しい）"
+            cp data/thoughts.db thoughts.db
           else
-            echo "thoughts.db を data/ にコピーします"
+            echo "thoughts.db を使用します（より新しい）"
             cp thoughts.db data/
           fi
+        elif [ -f "data/thoughts.db" ]; then
+          echo "data/thoughts.db のみ存在します"
+          cp data/thoughts.db thoughts.db
+        elif [ -f "thoughts.db" ]; then
+          echo "thoughts.db のみ存在します"
+          mkdir -p data
+          cp thoughts.db data/
+        else
+          echo "データベースが存在しません"
+          mkdir -p data
         fi
     
     - name: Check if database exists
@@ -67,8 +83,8 @@ jobs:
         else
           echo "新規のデータベースを作成します"
           mkdir -p data
-          echo "空のデータベースファイルを作成します"
           touch data/thoughts.db
+          echo "新規データベースを作成しました"
         fi
         
         # データベースの状態を確認
