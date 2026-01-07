@@ -130,7 +130,7 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
             'cogs.thoughts.list',
             'cogs.thoughts.search',
             'cogs.thoughts.edit',
-            'cogs.thoughts.cleanup',
+            'cogs.thoughts.restore_messages',  # メッセージ整理用
             'cogs.thoughts.help',
         ]
         
@@ -194,7 +194,7 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
                     logger.info(cmd_info)
             
             # 必要なコマンドがすべて登録されているか確認
-            required_commands = {'post', 'delete', 'list', 'search', 'edit', 'help'}
+            required_commands = {'post', 'delete', 'list', 'search', 'edit', 'help', 'restore_messages'}
             registered_command_names = {cmd.name for cmd in registered_commands}
             missing_commands = required_commands - registered_command_names
             
