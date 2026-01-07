@@ -823,4 +823,3 @@ class Edit(commands.Cog, DatabaseMixin):
 
 async def setup(bot):
     await bot.add_cog(Edit(bot))
-
