@@ -25,15 +25,16 @@ class DataRecovery(commands.Cog, DatabaseMixin):
             await interaction.response.defer(ephemeral=True)
             
             # 復元対象チャンネルを決定
+            channels = []
             if channel_id:
                 target_channel = interaction.guild.get_channel(int(channel_id))
                 if not target_channel:
                     await interaction.followup.send("❌ 指定されたチャンネルが見つかりません。", ephemeral=True)
                     return
+                channels.append(target_channel)
             else:
                 # 公開チャンネルと非公開チャンネルの両方を確認
                 from config import CHANNELS
-                channels = []
                 for channel_type, cid in CHANNELS.items():
                     ch = interaction.guild.get_channel(cid)
                     if ch:
