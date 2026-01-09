@@ -499,9 +499,18 @@ class Edit(commands.Cog, DatabaseMixin):
                         
                         # 表示名を設定
                         print(f"[DEBUG] メッセージ更新時: is_anonymous={self._is_anonymous}")
-                        if self._is_anonymous:
+                        
+                        # 強制匿名モード：データベースの値を再確認
+                        cursor.execute('SELECT is_anonymous FROM thoughts WHERE id = ?', (self.post_id,))
+                        db_is_anonymous = bool(cursor.fetchone()[0])
+                        print(f"[DEBUG] データベース再確認: is_anonymous={db_is_anonymous}")
+                        
+                        # データベースの値を優先する
+                        final_is_anonymous = db_is_anonymous
+                        
+                        if final_is_anonymous:
                             embed.set_author(name='匿名ユーザー', icon_url=DEFAULT_AVATAR)
-                            print(f"[DEBUG] 匿名ユーザーに設定: {DEFAULT_AVATAR}")
+                            print(f"[DEBUG] 強制匿名ユーザーに設定: {DEFAULT_AVATAR}")
                         else:
                             # 新しい表示名が入力された場合（無効化されている場合は無視）
                             new_display_name = None
@@ -633,9 +642,18 @@ class Edit(commands.Cog, DatabaseMixin):
                         
                         # 表示名を設定
                         print(f"[DEBUG] メッセージ更新時: is_anonymous={self._is_anonymous}")
-                        if self._is_anonymous:
+                        
+                        # 強制匿名モード：データベースの値を再確認
+                        cursor.execute('SELECT is_anonymous FROM thoughts WHERE id = ?', (self.post_id,))
+                        db_is_anonymous = bool(cursor.fetchone()[0])
+                        print(f"[DEBUG] データベース再確認: is_anonymous={db_is_anonymous}")
+                        
+                        # データベースの値を優先する
+                        final_is_anonymous = db_is_anonymous
+                        
+                        if final_is_anonymous:
                             embed.set_author(name='匿名ユーザー', icon_url=DEFAULT_AVATAR)
-                            print(f"[DEBUG] 匿名ユーザーに設定: {DEFAULT_AVATAR}")
+                            print(f"[DEBUG] 強制匿名ユーザーに設定: {DEFAULT_AVATAR}")
                         else:
                             # 新しい表示名が入力された場合（無効化されている場合は無視）
                             new_display_name = None
