@@ -475,7 +475,11 @@ class Edit(commands.Cog, DatabaseMixin):
                             print(f"[DEBUG] データベース値で通常ユーザー: {author_name}")
                         
                         # フッターにカテゴリーと投稿IDを表示
-                        embed.set_footer(text=f'カテゴリー: {category or "未設定"} | ID: {self.post_id}')
+                        # フッター設定（カテゴリーがない場合はIDのみ）
+                        if category:
+                            embed.set_footer(text=f'カテゴリー: {category} | ID: {self.post_id}')
+                        else:
+                            embed.set_footer(text=f'ID: {self.post_id}')
                         
                         # 画像があれば追加
                         if image_url:
