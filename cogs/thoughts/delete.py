@@ -177,23 +177,79 @@ class Delete(commands.Cog, DatabaseMixin):
             if post_id:
                 logger.info(f"投稿IDで直接削除します: {post_id}")
                 
-                # 管理者権限を確認
-                is_admin = interaction.user.guild_permissions.administrator
-                
-                # 投稿を削除
-                success, was_private = await self._delete_post(post_id, interaction.user.id, is_admin)
-                
-                if not success:
+                # まずメッセージ参照を取得
+                try:
+                    with self._get_db_connection() as conn:
+                        with self._get_cursor(conn) as cursor:
+                            cursor.execute('''
+                                SELECT message_id, channel_id, user_id, is_private
+                                FROM message_references mr
+                                JOIN thoughts t ON mr.post_id = t.id
+                                WHERE mr.post_id = ?
+                            ''', (post_id,))
+                            
+                            row = cursor.fetchone()
+                            if row:
+                                message_id, channel_id, post_user_id, is_private = row
+                                logger.info(f"メッセージ参照を取得: message_id={message_id}, channel_id={channel_id}")
+                                
+                                # 権限チェック
+                                is_admin = interaction.user.guild_permissions.administrator
+                                if str(post_user_id) != str(interaction.user.id) and not is_admin:
+                                    await interaction.followup.send(
+                                        "❌ この投稿を削除する権限がありません。",
+                                        ephemeral=True
+                                    )
+                                    return
+                                
+                                # メッセージを削除
+                                try:
+                                    channel = await interaction.guild.fetch_channel(int(channel_id))
+                                    message = await channel.fetch_message(int(message_id))
+                                    await message.delete()
+                                    logger.info(f"メッセージ {message_id} を削除しました")
+                                except discord.NotFound:
+                                    logger.warning(f"メッセージが見つかりません: {message_id}")
+                                except discord.Forbidden:
+                                    logger.warning(f"メッセージの削除権限がありません: {message_id}")
+                                except Exception as e:
+                                    logger.error(f"メッセージ削除中にエラー: {e}")
+                                
+                                # データベースから投稿を削除
+                                success, was_private = await self._delete_post(post_id, interaction.user.id, is_admin)
+                                
+                                if success:
+                                    await interaction.followup.send(
+                                        "✅ 投稿を削除しました。（メッセージとデータベースから削除）",
+                                        ephemeral=True
+                                    )
+                                else:
+                                    await interaction.followup.send(
+                                        "❌ データベースからの削除に失敗しました。",
+                                        ephemeral=True
+                                    )
+                            else:
+                                # メッセージ参照がない場合はデータベースからのみ削除
+                                logger.info(f"メッセージ参照がありません: {post_id}")
+                                is_admin = interaction.user.guild_permissions.administrator
+                                success, was_private = await self._delete_post(post_id, interaction.user.id, is_admin)
+                                
+                                if success:
+                                    await interaction.followup.send(
+                                        "✅ 投稿を削除しました。（データベースからのみ削除）",
+                                        ephemeral=True
+                                    )
+                                else:
+                                    await interaction.followup.send(
+                                        "❌ 投稿の削除に失敗しました。",
+                                        ephemeral=True
+                                    )
+                except Exception as e:
+                    logger.error(f"投稿ID削除中にエラー: {e}")
                     await interaction.followup.send(
-                        "❌ 投稿の削除に失敗しました。権限がないか、既に削除されています。",
+                        "❌ 削除中にエラーが発生しました。",
                         ephemeral=True
                     )
-                    return
-                
-                await interaction.followup.send(
-                    "✅ 投稿を削除しました。（データベースからのみ削除）",
-                    ephemeral=True
-                )
                 return
             
             # メッセージIDが指定されている場合
