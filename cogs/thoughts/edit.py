@@ -184,30 +184,6 @@ class Edit(commands.Cog, DatabaseMixin):
             self.add_item(self.category_input)
             self.add_item(self.image_url_input)
             self.add_item(self.display_name_input)  # 常に追加
-            
-            # トグルボタン用のビュー
-            self.toggle_view = ui.View(timeout=None)
-            
-            # 匿名トグルボタン
-            self.is_anonymous = self.anonymous_button = ui.Button(
-                style=discord.ButtonStyle.secondary,
-                label=f"匿名: {'ON' if self._is_anonymous else 'OFF'}",
-                custom_id=f"edit_anonymous_{post_id}"
-            )
-            self.anonymous_button.callback = self.toggle_anonymous
-            self.toggle_view.add_item(self.anonymous_button)
-            
-            # デバッグ：初期状態を確認
-            print(f"[DEBUG] ボタン初期化: is_anonymous={self._is_anonymous}, label={self.anonymous_button.label}")
-            
-            # 非公開トグルボタン
-            self.is_private = self.private_button = ui.Button(
-                style=discord.ButtonStyle.secondary,
-                label=f"非公開: {'ON' if current_is_private else 'OFF'}",
-                custom_id=f"edit_private_{post_id}"
-            )
-            self.private_button.callback = self.toggle_private
-            self.toggle_view.add_item(self.private_button)
         
         @contextmanager
         def _get_db_connection(self) -> Iterator[sqlite3.Connection]:
@@ -257,52 +233,6 @@ class Edit(commands.Cog, DatabaseMixin):
                 if 'cursor' in locals():
                     cursor.close()
         
-        async def toggle_anonymous(self, interaction: discord.Interaction) -> None:
-            """匿名設定をトグルします。
-            
-            Args:
-                interaction: インタラクションオブジェクト
-            """
-            try:
-                print(f"[DEBUG] トグル前: is_anonymous={self._is_anonymous}")
-                self._is_anonymous = not self._is_anonymous
-                self.anonymous_button.label = f"匿名: {'ON' if self._is_anonymous else 'OFF'}"
-                
-                # 表示名入力フィールドの有効/無効を切り替え
-                if self._is_anonymous:
-                    self.display_name_input.placeholder = "匿名投稿のため表示名は変更できません"
-                else:
-                    self.display_name_input.placeholder = "変更する場合のみ入力（空白で元のユーザー名）"
-                
-                print(f"[DEBUG] トグル後: is_anonymous={self._is_anonymous}, label={self.anonymous_button.label}")
-                await interaction.response.edit_message(view=self.toggle_view)
-                logger.debug(f"匿名設定を {'有効' if self._is_anonymous else '無効'} に変更")
-            except Exception as e:
-                logger.error(f"匿名設定の更新中にエラーが発生しました: {e}", exc_info=True)
-                if not interaction.response.is_done():
-                    await interaction.response.send_message(
-                        "匿名設定の更新中にエラーが発生しました。",
-                        ephemeral=True
-                    )
-        
-        async def toggle_private(self, interaction: discord.Interaction) -> None:
-            """非公開設定をトグルします。
-            
-            Args:
-                interaction: インタラクションオブジェクト
-            """
-            try:
-                self._is_private = not self._is_private
-                self.private_button.label = f"非公開: {'ON' if self._is_private else 'OFF'}"
-                await interaction.response.edit_message(view=self.toggle_view)
-                logger.debug(f"非公開設定を {'有効' if self._is_private else '無効'} に変更")
-            except Exception as e:
-                logger.error(f"非公開設定の更新中にエラーが発生しました: {e}", exc_info=True)
-                if not interaction.response.is_done():
-                    await interaction.response.send_message(
-                        "非公開設定の更新中にエラーが発生しました。",
-                        ephemeral=True
-                    )
         
         async def on_submit(self, interaction: discord.Interaction) -> None:
             """フォームの送信を処理します。
@@ -707,8 +637,8 @@ class Edit(commands.Cog, DatabaseMixin):
             current_content, current_category, current_image_url, current_is_anonymous, current_is_private, _ = post
             
             # 編集モーダルを表示
-            modal = self.view.cog.EditModal(
-                bot=self.view.cog.bot,
+            view = self.view.cog.EditSetupView(
+                cog=self.view.cog,
                 post_id=post_id,
                 current_content=current_content,
                 current_category=current_category,
@@ -716,19 +646,79 @@ class Edit(commands.Cog, DatabaseMixin):
                 current_is_anonymous=bool(current_is_anonymous),
                 current_is_private=bool(current_is_private)
             )
-            
-            # モーダルを直接表示
-            try:
-                await interaction.response.send_modal(modal)
-            except discord.InteractionResponded:
-                # 既にレスポンスが送信されている場合は、フォローアップとして送信
-                await interaction.followup.send("❌ エラーが発生しました。もう一度お試しください。", ephemeral=True)
+            if not interaction.response.is_done():
+                await interaction.response.send_message("設定を確認してから『編集を開く』を押してください。", view=view, ephemeral=True)
+            else:
+                await interaction.followup.send("設定を確認してから『編集を開く』を押してください。", view=view, ephemeral=True)
     
     class PostSelectView(discord.ui.View):
         def __init__(self, cog, posts):
             super().__init__(timeout=60)
             self.cog = cog
             self.add_item(PostSelect(posts))
+
+    class EditSetupView(discord.ui.View):
+        def __init__(
+            self,
+            cog: 'Edit',
+            post_id: int,
+            current_content: str,
+            current_category: str,
+            current_image_url: Optional[str],
+            current_is_anonymous: bool,
+            current_is_private: bool,
+        ):
+            super().__init__(timeout=300)
+            self.cog = cog
+            self.post_id = post_id
+            self.current_content = current_content
+            self.current_category = current_category
+            self.current_image_url = current_image_url
+            self.is_anonymous = bool(current_is_anonymous)
+            self.is_private = bool(current_is_private)
+
+            self.anonymous_button = ui.Button(
+                style=discord.ButtonStyle.secondary,
+                label=f"匿名: {'ON' if self.is_anonymous else 'OFF'}"
+            )
+            self.anonymous_button.callback = self._toggle_anonymous
+            self.add_item(self.anonymous_button)
+
+            self.private_button = ui.Button(
+                style=discord.ButtonStyle.secondary,
+                label=f"非公開: {'ON' if self.is_private else 'OFF'}"
+            )
+            self.private_button.callback = self._toggle_private
+            self.add_item(self.private_button)
+
+            self.open_button = ui.Button(
+                style=discord.ButtonStyle.primary,
+                label="編集を開く"
+            )
+            self.open_button.callback = self._open_modal
+            self.add_item(self.open_button)
+
+        async def _toggle_anonymous(self, interaction: discord.Interaction):
+            self.is_anonymous = not self.is_anonymous
+            self.anonymous_button.label = f"匿名: {'ON' if self.is_anonymous else 'OFF'}"
+            await interaction.response.edit_message(view=self)
+
+        async def _toggle_private(self, interaction: discord.Interaction):
+            self.is_private = not self.is_private
+            self.private_button.label = f"非公開: {'ON' if self.is_private else 'OFF'}"
+            await interaction.response.edit_message(view=self)
+
+        async def _open_modal(self, interaction: discord.Interaction):
+            modal = self.cog.EditModal(
+                bot=self.cog.bot,
+                post_id=self.post_id,
+                current_content=self.current_content,
+                current_category=self.current_category,
+                current_image_url=self.current_image_url,
+                current_is_anonymous=self.is_anonymous,
+                current_is_private=self.is_private,
+            )
+            await interaction.response.send_modal(modal)
     
     @app_commands.command(name="edit", description="投稿を編集します")
     @app_commands.describe(post_id="編集する投稿のID（省略可）")
@@ -770,8 +760,8 @@ class Edit(commands.Cog, DatabaseMixin):
                     return
                 
                 # モーダルを表示
-                modal = self.EditModal(
-                    bot=self.bot,
+                view = self.EditSetupView(
+                    cog=self,
                     post_id=post_id,
                     current_content=current_content,
                     current_category=current_category,
@@ -779,7 +769,7 @@ class Edit(commands.Cog, DatabaseMixin):
                     current_is_anonymous=bool(current_is_anonymous),
                     current_is_private=bool(current_is_private)
                 )
-                await interaction.response.send_modal(modal)
+                await interaction.response.send_message("設定を確認してから『編集を開く』を押してください。", view=view, ephemeral=True)
                 return
                 
             # post_idが指定されていない場合は投稿一覧を表示
