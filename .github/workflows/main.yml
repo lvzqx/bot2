@@ -80,26 +80,63 @@ jobs:
     
     - name: Check if database exists
       run: |
-        # 既存のデータベースがあればそれを使用
-        if [ -f "thoughts.db" ]; then
-          echo "既存のデータベースを使用します"
-          mkdir -p data
-          cp thoughts.db data/
-          echo "既存データベースを data/ にコピーしました"
-        else
-          echo "新規のデータベースを作成します"
-          mkdir -p data
-          touch data/thoughts.db
-          echo "新規データベースを作成しました"
-        fi
-        
         # データベースの状態を確認
         if [ -f "data/thoughts.db" ]; then
-          echo "データベースファイルサイズ: $(wc -c < data/thoughts.db) bytes"
+          echo "既存のデータベースサイズ: $(wc -c < data/thoughts.db) bytes"
           if [ -s "data/thoughts.db" ]; then
-            echo "データベースは空ではありません"
+            echo "✅ 既存のデータベースを使用します（データあり）"
+            
+            # データベースにデータがあるか確認
+            sqlite3 data/thoughts.db "SELECT COUNT(*) FROM thoughts;" > /tmp/db_count.txt 2>/dev/null || echo "0" > /tmp/db_count.txt
+            DB_COUNT=$(cat /tmp/db_count.txt)
+            echo "📊 データベースの投稿数: $DB_COUNT"
+            
+            if [ "$DB_COUNT" -gt 0 ]; then
+              echo "✅ データベースにデータが存在します。既存データを保護します。"
+              # 既存データを保護（上書きしない）
+              if [ -f "thoughts.db" ]; then
+                echo "⚠️ thoughts.db は無視します（既存データを保護）"
+                rm -f thoughts.db
+              fi
+            else
+              echo "⚠️ データベースは空です"
+              if [ -f "thoughts.db" ] && [ -s "thoughts.db" ]; then
+                echo "🔄 thoughts.db にデータがあるため、そちらを使用します"
+                cp thoughts.db data/thoughts.db
+              fi
+            fi
           else
-            echo "データベースは空です"
+            echo "⚠️ 既存のデータベースは空です"
+            if [ -f "thoughts.db" ] && [ -s "thoughts.db" ]; then
+              echo "🔄 thoughts.db にデータがあるため、そちらを使用します"
+              cp thoughts.db data/thoughts.db
+            else
+              echo "📝 新規データベースを作成します"
+              touch data/thoughts.db
+            fi
+          fi
+        else
+          echo "📝 データベースが存在しません"
+          if [ -f "thoughts.db" ] && [ -s "thoughts.db" ]; then
+            echo "🔄 thoughts.db を使用します"
+            mkdir -p data
+            cp thoughts.db data/thoughts.db
+          else
+            echo "📝 新規データベースを作成します"
+            mkdir -p data
+            touch data/thoughts.db
+          fi
+        fi
+        
+        # 最終的なデータベース状態を確認
+        if [ -f "data/thoughts.db" ]; then
+          echo "📊 最終データベースサイズ: $(wc -c < data/thoughts.db) bytes"
+          if [ -s "data/thoughts.db" ]; then
+            sqlite3 data/thoughts.db "SELECT COUNT(*) FROM thoughts;" > /tmp/final_count.txt 2>/dev/null || echo "0" > /tmp/final_count.txt
+            FINAL_COUNT=$(cat /tmp/final_count.txt)
+            echo "📊 最終投稿数: $FINAL_COUNT"
+          else
+            echo "⚠️ 最終データベースは空です"
           fi
         fi
     
@@ -190,40 +227,3 @@ jobs:
             
             # コミットをリトライ
             for i in {1..3}; do
-              if git commit -m "🗄️ Update database - $(date '+%Y-%m-%d %H:%M:%S')"; then
-                echo "✅ データベースをコミットしました (試行 $i)"
-                break
-              else
-                echo "⚠️ コミット失敗、リトライします (試行 $i/3)"
-                git pull --rebase origin main || true
-                sleep 5
-              fi
-            done
-            
-            # プッシュをリトライ
-            for i in {1..3}; do
-              if git push origin main; then
-                echo "✅ データベースをプッシュしました (試行 $i)"
-                break
-              else
-                echo "⚠️ プッシュ失敗、リトライします (試行 $i/3)"
-                sleep 10
-              fi
-            done
-          else
-            echo "ℹ️ データベースに変更はありません"
-          fi
-        fi
-    
-    - name: Show logs
-      if: always()
-      run: |
-        if [ -f bot.log ]; then
-          echo "=== 最終ログ ==="
-          tail -n 50 bot.log
-        fi
-        if [ -f "data/thoughts.db" ]; then
-          echo "=== データベース情報 ==="
-          ls -la data/
-          sqlite3 data/thoughts.db "SELECT COUNT(*) FROM thoughts;" || echo "データベースが存在しません"
-        fi
