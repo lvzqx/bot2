@@ -500,10 +500,15 @@ class Edit(commands.Cog, DatabaseMixin):
                         # 表示名を設定
                         print(f"[DEBUG] メッセージ更新時: is_anonymous={self._is_anonymous}")
                         
-                        # ユーザー名表示モード：トグルで匿名/通常を切り替え
-                        if self._is_anonymous:
+                        # 根本的修正：データベースから現在の状態を再取得
+                        cursor.execute('SELECT is_anonymous FROM thoughts WHERE id = ?', (self.post_id,))
+                        current_db_anonymous = bool(cursor.fetchone()[0])
+                        print(f"[DEBUG] データベース現在値: is_anonymous={current_db_anonymous}")
+                        
+                        # データベースの値を強制使用
+                        if current_db_anonymous:
                             embed.set_author(name='匿名ユーザー', icon_url=DEFAULT_AVATAR)
-                            print(f"[DEBUG] 匿名ユーザーに設定: {DEFAULT_AVATAR}")
+                            print(f"[DEBUG] データベース値で匿名ユーザー: {DEFAULT_AVATAR}")
                         else:
                             # 新しい表示名が入力された場合（無効化されている場合は無視）
                             new_display_name = None
@@ -515,7 +520,7 @@ class Edit(commands.Cog, DatabaseMixin):
                                 name=display_name,
                                 icon_url=interaction.user.display_avatar.url
                             )
-                            print(f"[DEBUG] 通常ユーザーに設定: {display_name}")
+                            print(f"[DEBUG] データベース値で通常ユーザー: {display_name}")
                         
                         # フッターにカテゴリーと投稿IDを表示
                         embed.set_footer(text=f'カテゴリー: {category or "未設定"} | ID: {self.post_id}')
@@ -636,10 +641,15 @@ class Edit(commands.Cog, DatabaseMixin):
                         # 表示名を設定
                         print(f"[DEBUG] メッセージ更新時: is_anonymous={self._is_anonymous}")
                         
-                        # ユーザー名表示モード：トグルで匿名/通常を切り替え
-                        if self._is_anonymous:
+                        # 根本的修正：データベースから現在の状態を再取得
+                        cursor.execute('SELECT is_anonymous FROM thoughts WHERE id = ?', (self.post_id,))
+                        current_db_anonymous = bool(cursor.fetchone()[0])
+                        print(f"[DEBUG] データベース現在値: is_anonymous={current_db_anonymous}")
+                        
+                        # データベースの値を強制使用
+                        if current_db_anonymous:
                             embed.set_author(name='匿名ユーザー', icon_url=DEFAULT_AVATAR)
-                            print(f"[DEBUG] 匿名ユーザーに設定: {DEFAULT_AVATAR}")
+                            print(f"[DEBUG] データベース値で匿名ユーザー: {DEFAULT_AVATAR}")
                         else:
                             # 新しい表示名が入力された場合（無効化されている場合は無視）
                             new_display_name = None
@@ -651,7 +661,7 @@ class Edit(commands.Cog, DatabaseMixin):
                                 name=display_name,
                                 icon_url=interaction.user.display_avatar.url
                             )
-                            print(f"[DEBUG] 通常ユーザーに設定: {display_name}")
+                            print(f"[DEBUG] データベース値で通常ユーザー: {display_name}")
                         
                         # フッターにカテゴリーと投稿IDを表示
                         embed.set_footer(text=f'カテゴリー: {category or "未設定"} | ID: {self.post_id}')
