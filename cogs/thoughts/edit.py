@@ -228,6 +228,15 @@ class Edit(commands.Cog, DatabaseMixin):
             finally:
                 if 'conn' in locals():
                     conn.close()
+
+        def _ensure_thoughts_display_name_column(self, cursor: sqlite3.Cursor) -> None:
+            try:
+                cursor.execute("PRAGMA table_info(thoughts)")
+                cols = {row[1] for row in cursor.fetchall()}
+                if 'display_name' not in cols:
+                    cursor.execute("ALTER TABLE thoughts ADD COLUMN display_name TEXT")
+            except sqlite3.Error as e:
+                logger.error(f"display_name カラム確認/追加に失敗しました: {e}", exc_info=True)
         
         @contextmanager
         def _get_cursor(self, conn: sqlite3.Connection) -> Iterator[sqlite3.Cursor]:
@@ -372,6 +381,7 @@ class Edit(commands.Cog, DatabaseMixin):
                 # データベース接続を取得
                 with self._get_db_connection() as conn:
                     with self._get_cursor(conn) as cursor:
+                        self._ensure_thoughts_display_name_column(cursor)
                         # 投稿を更新
                         print(f"[DEBUG] データベース更新前: is_anonymous={self._is_anonymous}, is_private={self._is_private}")
                         cursor.execute("""
@@ -468,6 +478,7 @@ class Edit(commands.Cog, DatabaseMixin):
             try:
                 with self._get_db_connection() as conn:
                     with self._get_cursor(conn) as cursor:
+                        self._ensure_thoughts_display_name_column(cursor)
                         cursor.execute("""
                             SELECT message_id, channel_id 
                             FROM message_references 
@@ -599,7 +610,7 @@ class Edit(commands.Cog, DatabaseMixin):
             logger.error(f"モーダル処理中にエラーが発生しました: {error}", exc_info=True)
             if not interaction.response.is_done():
                 await interaction.response.send_message(
-                    "エラーが発生しました。もう一度お試しください。",
+                    f"エラーが発生しました: {type(error).__name__}: {error}",
                     ephemeral=True
                 )
             
