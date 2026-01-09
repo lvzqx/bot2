@@ -479,8 +479,10 @@ class Edit(commands.Cog, DatabaseMixin):
                         )
                         
                         # 表示名を設定
+                        print(f"[DEBUG] メッセージ更新時: is_anonymous={self._is_anonymous}")
                         if self._is_anonymous:
                             embed.set_author(name='匿名ユーザー', icon_url=DEFAULT_AVATAR)
+                            print(f"[DEBUG] 匿名ユーザーに設定: {DEFAULT_AVATAR}")
                         else:
                             # 新しい表示名が入力された場合
                             new_display_name = self.display_name_input.value.strip() if self.display_name and self.display_name_input.value.strip() else None
@@ -489,6 +491,7 @@ class Edit(commands.Cog, DatabaseMixin):
                                 name=display_name,
                                 icon_url=interaction.user.display_avatar.url
                             )
+                            print(f"[DEBUG] 通常ユーザーに設定: {display_name}")
                         
                         # フッターにカテゴリーと投稿IDを表示
                         embed.set_footer(text=f'カテゴリー: {category or "未設定"} | ID: {self.post_id}')
@@ -607,8 +610,10 @@ class Edit(commands.Cog, DatabaseMixin):
                         )
                         
                         # 表示名を設定
+                        print(f"[DEBUG] メッセージ更新時: is_anonymous={self._is_anonymous}")
                         if self._is_anonymous:
                             embed.set_author(name='匿名ユーザー', icon_url=DEFAULT_AVATAR)
+                            print(f"[DEBUG] 匿名ユーザーに設定: {DEFAULT_AVATAR}")
                         else:
                             # 新しい表示名が入力された場合
                             new_display_name = self.display_name_input.value.strip() if self.display_name and self.display_name_input.value.strip() else None
@@ -617,6 +622,7 @@ class Edit(commands.Cog, DatabaseMixin):
                                 name=display_name,
                                 icon_url=interaction.user.display_avatar.url
                             )
+                            print(f"[DEBUG] 通常ユーザーに設定: {display_name}")
                         
                         # フッターにカテゴリーと投稿IDを表示
                         embed.set_footer(text=f'カテゴリー: {category or "未設定"} | ID: {self.post_id}')
