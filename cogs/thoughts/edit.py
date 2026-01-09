@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Dict, Iterator, List, Literal, Optional, Tuple, TypedDict, Union, cast
 from urllib.parse import urlparse
+from config import CHANNELS, DEFAULT_AVATAR
 
 import discord
 from discord import app_commands, ui, Interaction, Embed, ButtonStyle
@@ -460,11 +461,11 @@ class Edit(commands.Cog, DatabaseMixin):
                         
                         # 表示名を設定
                         if self._is_anonymous:
-                            embed.set_author(name='匿名')
+                            embed.set_author(name='匿名ユーザー', icon_url=DEFAULT_AVATAR)
                         else:
                             embed.set_author(
-                                name=interaction.user.display_name,
-                                icon_url=str(interaction.user.display_avatar.url)
+                                name=str(interaction.user),
+                                icon_url=interaction.user.display_avatar.url
                             )
                         
                         # フッターにカテゴリーと投稿IDを表示
@@ -585,11 +586,11 @@ class Edit(commands.Cog, DatabaseMixin):
                         
                         # 表示名を設定
                         if self._is_anonymous:
-                            embed.set_author(name='匿名')
+                            embed.set_author(name='匿名ユーザー', icon_url=DEFAULT_AVATAR)
                         else:
                             embed.set_author(
-                                name=interaction.user.display_name,
-                                icon_url=str(interaction.user.display_avatar.url)
+                                name=str(interaction.user),
+                                icon_url=interaction.user.display_avatar.url
                             )
                         
                         # フッターにカテゴリーと投稿IDを表示

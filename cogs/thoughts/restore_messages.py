@@ -156,12 +156,28 @@ class MessageRestore(commands.Cog):
                             ephemeral=True
                         )
                 else:
-                    # すべてのメッセージ参照をチェック
+                    # すべてのメッセージ参照をチェック（パフォーマンス対策）
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM message_references
+                    """)
+                    total_refs = cursor.fetchone()[0]
+                    
+                    # 大量データの場合は警告
+                    if total_refs > 1000:
+                        await interaction.followup.send(
+                            f"⚠️ {total_refs}件のメッセージ参照があります。\n"
+                            f"処理に時間がかかる場合があります。\n"
+                            f"個別に確認する場合は /restore_messages <message_id> check を使用してください。",
+                            ephemeral=True
+                        )
+                        return
+                    
                     cursor.execute("""
                         SELECT mr.post_id, mr.message_id, mr.channel_id, t.created_at
                         FROM message_references mr
                         JOIN thoughts t ON mr.post_id = t.id
                         ORDER BY t.created_at DESC
+                        LIMIT 500
                     """)
                     
                     all_refs = cursor.fetchall()
