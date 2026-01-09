@@ -403,8 +403,16 @@ class Edit(commands.Cog, DatabaseMixin):
                     await self._update_discord_message(interaction, content, category, image_url)
                     print(f"[DEBUG] Discordメッセージ更新が完了しました")
                 except Exception as e:
-                    logger.warning(f"Discordメッセージの更新に失敗しましたが、データベースは更新されています: {e}")
+                    logger.warning(f"Discordメッセージの更新に失敗しましたが、データベースは更新されています: {e}", exc_info=True)
                     print(f"[DEBUG] Discordメッセージ更新エラー: {e}")
+                    # ユーザーにも理由を返す（DBは更新済み）
+                    try:
+                        await interaction.followup.send(
+                            f"⚠️ データベースは更新されましたが、Discordメッセージの更新に失敗しました。\n理由: {e}",
+                            ephemeral=True
+                        )
+                    except Exception:
+                        pass
                 print(f"[DEBUG] Discordメッセージ更新処理を終了します")
                 
                 # 成功メッセージを送信
@@ -463,7 +471,7 @@ class Edit(commands.Cog, DatabaseMixin):
                             refs = cursor.fetchall()
                             print(f"[DEBUG] メッセージ参照一覧: {refs}")
                             logger.info(f"メッセージ参照一覧: {refs}")
-                            return
+                            raise RuntimeError(f"message_references が見つかりません (post_id={self.post_id})")
                             
                         message_id, channel_id = message_ref
                         print(f"[DEBUG] メッセージ更新を試行: post_id={self.post_id}, message_id={message_id}, channel_id={channel_id}")
@@ -475,21 +483,17 @@ class Edit(commands.Cog, DatabaseMixin):
                             try:
                                 channel = await self.bot.fetch_channel(int(channel_id))
                             except Exception as e:
-                                logger.error(f"チャンネル {channel_id} の取得に失敗しました: {e}")
-                                return
+                                raise RuntimeError(f"チャンネル取得に失敗しました (channel_id={channel_id}): {e}")
                         
                         if not channel:
-                            logger.error(f"チャンネル {channel_id} が見つかりません")
-                            return
+                            raise RuntimeError(f"チャンネルが見つかりません (channel_id={channel_id})")
                             
                         try:
                             message = await channel.fetch_message(int(message_id))
                         except discord.NotFound:
-                            logger.error(f"メッセージ {message_id} が見つかりません")
-                            return
+                            raise RuntimeError(f"メッセージが見つかりません (message_id={message_id})")
                         except discord.Forbidden:
-                            logger.error(f"メッセージ {message_id} へのアクセス権限がありません")
-                            return
+                            raise RuntimeError(f"メッセージへのアクセス権限がありません (message_id={message_id})")
                         
                         # 埋め込みメッセージを作成
                         embed = discord.Embed(
@@ -570,130 +574,6 @@ class Edit(commands.Cog, DatabaseMixin):
             
             # discord.ui.Modal の既定の on_error も呼び出す
             await super().on_error(interaction, error)
-        
-        async def _update_discord_message(
-            self, 
-            interaction: discord.Interaction, 
-            content: str, 
-            category: Optional[str], 
-            image_url: Optional[str]
-        ) -> None:
-            """Discordのメッセージを更新します。
-            
-            Args:
-                interaction: インタラクションオブジェクト
-                content: 投稿内容
-                category: カテゴリー
-                image_url: 画像URL
-            """
-            try:
-                with self._get_db_connection() as conn:
-                    with self._get_cursor(conn) as cursor:
-                        cursor.execute("""
-                            SELECT message_id, channel_id 
-                            FROM message_references 
-                            WHERE post_id = ?
-                        """, (self.post_id,))
-                        
-                        message_ref = cursor.fetchone()
-                        if not message_ref:
-                            print(f"[DEBUG] Post {self.post_id} のメッセージ参照が見つかりません")
-                            logger.warning(f"Post {self.post_id} のメッセージ参照が見つかりません")
-                            logger.info(f"現在のメッセージ参照を確認します...")
-                            cursor.execute('SELECT post_id, message_id, channel_id FROM message_references LIMIT 5')
-                            refs = cursor.fetchall()
-                            print(f"[DEBUG] メッセージ参照一覧: {refs}")
-                            logger.info(f"メッセージ参照一覧: {refs}")
-                            return
-                            
-                        message_id, channel_id = message_ref
-                        print(f"[DEBUG] メッセージ更新を試行: post_id={self.post_id}, message_id={message_id}, channel_id={channel_id}")
-                        logger.info(f"メッセージ更新を試行: post_id={self.post_id}, message_id={message_id}, channel_id={channel_id}")
-                        
-                        # チャンネルを取得（キャッシュから取得できない場合はfetch）
-                        channel = self.bot.get_channel(int(channel_id))
-                        if not channel:
-                            try:
-                                channel = await self.bot.fetch_channel(int(channel_id))
-                            except Exception as e:
-                                logger.error(f"チャンネル {channel_id} の取得に失敗しました: {e}")
-                                return
-                        
-                        if not channel:
-                            logger.error(f"チャンネル {channel_id} が見つかりません")
-                            return
-                            
-                        try:
-                            message = await channel.fetch_message(int(message_id))
-                        except discord.NotFound:
-                            logger.error(f"メッセージ {message_id} が見つかりません")
-                            return
-                        except discord.Forbidden:
-                            logger.error(f"メッセージ {message_id} へのアクセス権限がありません")
-                            return
-                        
-                        # 埋め込みメッセージを作成
-                        embed = discord.Embed(
-                            description=content,
-                            color=discord.Color.blue()
-                        )
-                        
-                        # 表示名を設定
-                        print(f"[DEBUG] メッセージ更新時: is_anonymous={self._is_anonymous}")
-                        
-                        # 根本的修正：データベースから現在の状態を再取得
-                        cursor.execute('SELECT is_anonymous FROM thoughts WHERE id = ?', (self.post_id,))
-                        current_db_anonymous = bool(cursor.fetchone()[0])
-                        print(f"[DEBUG] データベース現在値: is_anonymous={current_db_anonymous}")
-                        
-                        # データベースの値を強制使用
-                        if current_db_anonymous:
-                            embed.set_author(name='匿名ユーザー', icon_url=DEFAULT_AVATAR)
-                            print(f"[DEBUG] データベース値で匿名ユーザー: {DEFAULT_AVATAR}")
-                        else:
-                            # 新しい表示名が入力された場合（無効化されている場合は無視）
-                            new_display_name = None
-                            if not self.display_name_input.disabled and self.display_name_input.value.strip():
-                                new_display_name = self.display_name_input.value.strip()
-                            
-                            display_name = new_display_name or str(interaction.user)
-                            embed.set_author(
-                                name=display_name,
-                                icon_url=interaction.user.display_avatar.url
-                            )
-                            print(f"[DEBUG] データベース値で通常ユーザー: {display_name}")
-                        
-                        # フッターにカテゴリーと投稿IDを表示
-                        embed.set_footer(text=f'カテゴリー: {category or "未設定"} | ID: {self.post_id}')
-                        
-                        # 画像があれば追加
-                        if image_url:
-                            embed.set_image(url=image_url)
-                        
-                        await message.edit(embed=embed)
-                        print(f"[DEBUG] メッセージを更新しました: post_id={self.post_id}, message_id={message_id}")
-                        logger.info(f"メッセージを更新しました: post_id={self.post_id}, message_id={message_id}")
-                        
-                        # 非公開投稿の場合はスレッドの最初のメッセージも更新
-                        # if self._is_private:
-                        #     try:
-                        #         # スレッドの場合はスレッド自体の名前も更新
-                        #         if hasattr(channel, 'thread') and channel.thread:
-                        #             thread = channel.thread
-                        #         elif isinstance(channel, discord.Thread):
-                        #             thread = channel
-                        #         else:
-                        #             thread = None
-                        #         
-                        #         if thread:
-                        #             preview = content[:50] + ('...' if len(content) > 50 else '')
-                        #             await thread.edit(name=f"非公開投稿 - ID: {self.post_id} - {preview}")
-                        #             logger.info(f"スレッド名を更新しました: post_id={self.post_id}")
-                        #     except Exception as e:
-                        #         logger.warning(f"スレッド名の更新に失敗しました: {e}")
-                        
-            except Exception as e:
-                logger.error(f"Discordメッセージの更新中にエラーが発生しました: {e}", exc_info=True)
         
         async def _update_post_in_database(
             self, 
