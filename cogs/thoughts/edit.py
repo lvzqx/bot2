@@ -165,25 +165,26 @@ class Edit(commands.Cog, DatabaseMixin):
                 required=False
             )
             
-            # 表示名入力（匿名でない場合のみ）
-            if not current_is_anonymous:
-                self.display_name = self.display_name_input = ui.TextInput(
-                    label="表示名（任意）",
-                    style=discord.TextStyle.short,
-                    placeholder="新しい表示名を入力...",
-                    default="",  # 現在の表示名は表示しない
-                    max_length=32,
-                    required=False
-                )
-            else:
-                self.display_name = None
+            # 表示名入力（常に作成し、匿名状態で制御）
+            self.display_name = self.display_name_input = ui.TextInput(
+                label="表示名（任意）",
+                style=discord.TextStyle.short,
+                placeholder="変更する場合のみ入力（空白で元のユーザー名）",
+                default="",  # 現在の表示名は表示しない
+                max_length=32,
+                required=False
+            )
+            
+            # 匿名の場合は表示名入力を無効化
+            if current_is_anonymous:
+                self.display_name_input.placeholder = "匿名投稿のため表示名は変更できません"
+                self.display_name_input.disabled = True
             
             # コンポーネントを追加
             self.add_item(self.content_input)
             self.add_item(self.category_input)
             self.add_item(self.image_url_input)
-            if self.display_name:
-                self.add_item(self.display_name_input)
+            self.add_item(self.display_name_input)  # 常に追加
             
             # トグルボタン用のビュー
             self.toggle_view = ui.View(timeout=None)
@@ -191,11 +192,14 @@ class Edit(commands.Cog, DatabaseMixin):
             # 匿名トグルボタン
             self.is_anonymous = self.anonymous_button = ui.Button(
                 style=discord.ButtonStyle.secondary,
-                label=f"匿名: {'ON' if current_is_anonymous else 'OFF'}",
+                label=f"匿名: {'ON' if self._is_anonymous else 'OFF'}",
                 custom_id=f"edit_anonymous_{post_id}"
             )
             self.anonymous_button.callback = self.toggle_anonymous
             self.toggle_view.add_item(self.anonymous_button)
+            
+            # デバッグ：初期状態を確認
+            print(f"[DEBUG] ボタン初期化: is_anonymous={self._is_anonymous}, label={self.anonymous_button.label}")
             
             # 非公開トグルボタン
             self.is_private = self.private_button = ui.Button(
@@ -252,8 +256,20 @@ class Edit(commands.Cog, DatabaseMixin):
                 interaction: インタラクションオブジェクト
             """
             try:
+                print(f"[DEBUG] トグル前: is_anonymous={self._is_anonymous}")
                 self._is_anonymous = not self._is_anonymous
                 self.anonymous_button.label = f"匿名: {'ON' if self._is_anonymous else 'OFF'}"
+                
+                # 表示名入力フィールドの有効/無効を切り替え
+                if self._is_anonymous:
+                    self.display_name_input.placeholder = "匿名投稿のため表示名は変更できません"
+                    self.display_name_input.disabled = True
+                else:
+                    self.display_name_input.placeholder = "変更する場合のみ入力（空白で元のユーザー名）"
+                    self.display_name_input.disabled = False
+                
+                print(f"[DEBUG] トグル後: is_anonymous={self._is_anonymous}, label={self.anonymous_button.label}")
+                print(f"[DEBUG] 表示名入力: disabled={self.display_name_input.disabled}")
                 await interaction.response.edit_message(view=self.toggle_view)
                 logger.debug(f"匿名設定を {'有効' if self._is_anonymous else '無効'} に変更")
             except Exception as e:
@@ -290,6 +306,7 @@ class Edit(commands.Cog, DatabaseMixin):
                 interaction: インタラクションオブジェクト
             """
             print(f"[DEBUG] on_submit が呼び出されました: post_id={self.post_id}")
+            print(f"[DEBUG] on_submit時の匿名状態: is_anonymous={self._is_anonymous}")
             self._interaction = interaction
             
             # 入力値のバリデーション
@@ -484,8 +501,11 @@ class Edit(commands.Cog, DatabaseMixin):
                             embed.set_author(name='匿名ユーザー', icon_url=DEFAULT_AVATAR)
                             print(f"[DEBUG] 匿名ユーザーに設定: {DEFAULT_AVATAR}")
                         else:
-                            # 新しい表示名が入力された場合
-                            new_display_name = self.display_name_input.value.strip() if self.display_name and self.display_name_input.value.strip() else None
+                            # 新しい表示名が入力された場合（無効化されている場合は無視）
+                            new_display_name = None
+                            if not self.display_name_input.disabled and self.display_name_input.value.strip():
+                                new_display_name = self.display_name_input.value.strip()
+                            
                             display_name = new_display_name or str(interaction.user)
                             embed.set_author(
                                 name=display_name,
@@ -615,8 +635,11 @@ class Edit(commands.Cog, DatabaseMixin):
                             embed.set_author(name='匿名ユーザー', icon_url=DEFAULT_AVATAR)
                             print(f"[DEBUG] 匿名ユーザーに設定: {DEFAULT_AVATAR}")
                         else:
-                            # 新しい表示名が入力された場合
-                            new_display_name = self.display_name_input.value.strip() if self.display_name and self.display_name_input.value.strip() else None
+                            # 新しい表示名が入力された場合（無効化されている場合は無視）
+                            new_display_name = None
+                            if not self.display_name_input.disabled and self.display_name_input.value.strip():
+                                new_display_name = self.display_name_input.value.strip()
+                            
                             display_name = new_display_name or str(interaction.user)
                             embed.set_author(
                                 name=display_name,

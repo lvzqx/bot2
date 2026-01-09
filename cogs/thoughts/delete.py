@@ -164,16 +164,45 @@ class Delete(commands.Cog, DatabaseMixin):
             logger.error(f"非公開ロールの削除中にエラーが発生しました: {e}")
 
     @app_commands.command(name="delete", description="投稿を削除します")
-    @app_commands.describe(message_id="削除するメッセージのID")
-    @app_commands.guild_only()
-    async def delete(self, interaction: discord.Interaction, message_id: str) -> None:
-        """メッセージIDで投稿を削除します"""
-        logger.info(f"delete コマンドが呼び出されました。ユーザー: {interaction.user}, メッセージID: {message_id}")
+    @app_commands.describe(message_id="削除する投稿のメッセージID", post_id="削除する投稿の投稿ID（メッセージが見つからない場合）")
+    async def delete_post(self, interaction: discord.Interaction, message_id: Optional[str] = None, post_id: Optional[int] = None) -> None:
+        """メッセージIDまたは投稿IDで投稿を削除します"""
+        logger.info(f"delete コマンドが呼び出されました。ユーザー: {interaction.user}, メッセージID: {message_id}, 投稿ID: {post_id}")
         
         # 応答を遅延
         await interaction.response.defer(ephemeral=True)
         
         try:
+            # 投稿IDが指定されている場合は直接削除
+            if post_id:
+                logger.info(f"投稿IDで直接削除します: {post_id}")
+                
+                # 管理者権限を確認
+                is_admin = interaction.user.guild_permissions.administrator
+                
+                # 投稿を削除
+                success, was_private = await self._delete_post(post_id, interaction.user.id, is_admin)
+                
+                if not success:
+                    await interaction.followup.send(
+                        "❌ 投稿の削除に失敗しました。権限がないか、既に削除されています。",
+                        ephemeral=True
+                    )
+                    return
+                
+                await interaction.followup.send(
+                    "✅ 投稿を削除しました。（データベースからのみ削除）",
+                    ephemeral=True
+                )
+                return
+            
+            # メッセージIDが指定されている場合
+            if not message_id:
+                await interaction.followup.send(
+                    "❌ メッセージIDまたは投稿IDを指定してください。",
+                    ephemeral=True
+                )
+                return
             # メッセージデータを取得
             message_data = await self._get_message_data(message_id)
             logger.info(f"メッセージデータ取得結果: {message_data}")
