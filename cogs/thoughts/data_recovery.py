@@ -116,35 +116,109 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                             is_private = not any(ch.id == channel.id for ch in channels if ch.name and "公開" in ch.name)
                             
                             # データベースに存在しないことを確認
-                            cursor.execute('SELECT id FROM thoughts WHERE id = ?', (post_id,))
-                            if post_id and not cursor.fetchone():
-                                # データベースに挿入
-                                cursor.execute('''
-                                    INSERT INTO thoughts (id, content, category, is_anonymous, is_private, user_id, created_at)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                                ''', (
-                                    post_id,
-                                    content,
-                                    category,
-                                    is_anonymous,
-                                    is_private,
-                                    interaction.user.id,  # 復元実行者のID
-                                    message.created_at
-                                ))
-                                
-                                # メッセージ参照を追加
-                                cursor.execute('''
-                                    INSERT INTO message_references (post_id, message_id, channel_id)
-                                    VALUES (?, ?, ?)
-                                ''', (post_id, str(message.id), str(channel.id)))
-                                
-                                recovered_count += 1
-                                
-                                if recovered_count % 10 == 0:
-                                    await interaction.followup.send(
-                                        f"🔄 {recovered_count}件を復元中...", 
-                                        ephemeral=True
-                                    )
+                            if post_id:
+                                cursor.execute('SELECT id FROM thoughts WHERE id = ?', (post_id,))
+                                if not cursor.fetchone():
+                                    # データベースに挿入
+                                    cursor.execute('''
+                                        INSERT INTO thoughts (id, content, category, is_anonymous, is_private, user_id, created_at)
+                                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                                    ''', (
+                                        post_id,
+                                        content,
+                                        category,
+                                        is_anonymous,
+                                        is_private,
+                                        interaction.user.id,  # 復元実行者のID
+                                        message.created_at
+                                    ))
+                                    
+                                    # メッセージ参照を追加
+                                    cursor.execute('''
+                                        INSERT INTO message_references (post_id, message_id, channel_id)
+                                        VALUES (?, ?, ?)
+                                    ''', (post_id, str(message.id), str(channel.id)))
+                                    
+                                    recovered_count += 1
+                                    
+                                    if recovered_count % 10 == 0:
+                                        await interaction.followup.send(
+                                            f"🔄 {recovered_count}件を復元中...", 
+                                            ephemeral=True
+                                        )
+                    
+                    # スレッドもスキャン
+                    if hasattr(channel, 'threads'):
+                        for thread in channel.threads:
+                            await interaction.followup.send(f"🧵 {thread.name} のメッセージをスキャン中...", ephemeral=True)
+                            
+                            async for message in thread.history(limit=None):
+                                # ボットのメッセージのみを処理
+                                if message.author.bot and message.embeds:
+                                    embed = message.embeds[0]
+                                    
+                                    # 投稿内容を取得
+                                    content = embed.description
+                                    if not content:
+                                        continue
+                                    
+                                    # フッターから投稿IDを抽出
+                                    footer_text = embed.footer.text if embed.footer else ""
+                                    post_id = None
+                                    
+                                    if "ID:" in footer_text:
+                                        try:
+                                            post_id = int(footer_text.split("ID:")[1].strip())
+                                        except (ValueError, IndexError):
+                                            pass
+                                    
+                                    # カテゴリーを抽出
+                                    category = None
+                                    if "カテゴリ:" in footer_text:
+                                        try:
+                                            category = footer_text.split("カテゴリ:")[1].split("|")[0].strip()
+                                            if category == "未設定":
+                                                category = None
+                                        except (IndexError, AttributeError):
+                                            pass
+                                    
+                                    # 匿名設定を判定
+                                    is_anonymous = embed.author.name == "匿名ユーザー"
+                                    
+                                    # 非公開設定を判定（親チャンネルから判定）
+                                    is_private = not any(ch.id == channel.id for ch in channels if ch.name and "公開" in ch.name)
+                                    
+                                    # データベースに存在しないことを確認
+                                    if post_id:
+                                        cursor.execute('SELECT id FROM thoughts WHERE id = ?', (post_id,))
+                                        if not cursor.fetchone():
+                                            # データベースに挿入
+                                            cursor.execute('''
+                                                INSERT INTO thoughts (id, content, category, is_anonymous, is_private, user_id, created_at)
+                                                VALUES (?, ?, ?, ?, ?, ?, ?)
+                                            ''', (
+                                                post_id,
+                                                content,
+                                                category,
+                                                is_anonymous,
+                                                is_private,
+                                                interaction.user.id,  # 復元実行者のID
+                                                message.created_at
+                                            ))
+                                            
+                                            # メッセージ参照を追加
+                                            cursor.execute('''
+                                                INSERT INTO message_references (post_id, message_id, channel_id)
+                                                VALUES (?, ?, ?)
+                                            ''', (post_id, str(message.id), str(thread.id)))
+                                            
+                                            recovered_count += 1
+                                            
+                                            if recovered_count % 10 == 0:
+                                                await interaction.followup.send(
+                                                    f"🔄 {recovered_count}件を復元中...", 
+                                                    ephemeral=True
+                                                )
                 
                 conn.commit()
             
