@@ -178,7 +178,6 @@ class Edit(commands.Cog, DatabaseMixin):
             # 匿名の場合は表示名入力を無効化
             if current_is_anonymous:
                 self.display_name_input.placeholder = "匿名投稿のため表示名は変更できません"
-                self.display_name_input.disabled = True
             
             # コンポーネントを追加
             self.add_item(self.content_input)
@@ -272,13 +271,10 @@ class Edit(commands.Cog, DatabaseMixin):
                 # 表示名入力フィールドの有効/無効を切り替え
                 if self._is_anonymous:
                     self.display_name_input.placeholder = "匿名投稿のため表示名は変更できません"
-                    self.display_name_input.disabled = True
                 else:
                     self.display_name_input.placeholder = "変更する場合のみ入力（空白で元のユーザー名）"
-                    self.display_name_input.disabled = False
                 
                 print(f"[DEBUG] トグル後: is_anonymous={self._is_anonymous}, label={self.anonymous_button.label}")
-                print(f"[DEBUG] 表示名入力: disabled={self.display_name_input.disabled}")
                 await interaction.response.edit_message(view=self.toggle_view)
                 logger.debug(f"匿名設定を {'有効' if self._is_anonymous else '無効'} に変更")
             except Exception as e:
@@ -323,7 +319,7 @@ class Edit(commands.Cog, DatabaseMixin):
             category = self.category_input.value.strip() if self.category_input.value else None
             image_url = self.image_url_input.value.strip() if self.image_url_input.value else None
             display_name = None
-            if not self.display_name_input.disabled:
+            if not self._is_anonymous:
                 raw_display_name = self.display_name_input.value.strip() if self.display_name_input.value else ""
                 display_name = raw_display_name or None
             
