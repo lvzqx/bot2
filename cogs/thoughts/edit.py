@@ -313,6 +313,10 @@ class Edit(commands.Cog, DatabaseMixin):
             content = self.content_input.value.strip()
             category = self.category_input.value.strip() if self.category_input.value else None
             image_url = self.image_url_input.value.strip() if self.image_url_input.value else None
+            display_name = None
+            if not self.display_name_input.disabled:
+                raw_display_name = self.display_name_input.value.strip() if self.display_name_input.value else ""
+                display_name = raw_display_name or None
             
             if not content:
                 await interaction.response.send_message(
@@ -330,7 +334,7 @@ class Edit(commands.Cog, DatabaseMixin):
                 return
             
             # 編集処理を実行
-            await self._edit_post(interaction, content, category, image_url)
+            await self._edit_post(interaction, content, category, image_url, display_name)
         
         def _is_valid_url(self, url: str) -> bool:
             """URLが有効かどうかを検証します。
@@ -352,7 +356,8 @@ class Edit(commands.Cog, DatabaseMixin):
             interaction: discord.Interaction, 
             content: str, 
             category: Optional[str], 
-            image_url: Optional[str]
+            image_url: Optional[str],
+            display_name: Optional[str]
         ) -> None:
             """投稿を編集します。
             
@@ -361,6 +366,7 @@ class Edit(commands.Cog, DatabaseMixin):
                 content: 投稿内容
                 category: カテゴリー
                 image_url: 画像URL
+                display_name: 表示名（任意）
             """
             try:
                 # データベース接続を取得
@@ -375,6 +381,7 @@ class Edit(commands.Cog, DatabaseMixin):
                                 image_url = ?, 
                                 is_anonymous = ?, 
                                 is_private = ?,
+                                display_name = ?,
                                 updated_at = CURRENT_TIMESTAMP
                             WHERE id = ?
                         """, (
@@ -383,6 +390,7 @@ class Edit(commands.Cog, DatabaseMixin):
                             image_url,
                             int(self._is_anonymous),
                             int(self._is_private),
+                            None if self._is_anonymous else display_name,
                             self.post_id
                         ))
                         print(f"[DEBUG] データベース更新完了: rowcount={cursor.rowcount}")
@@ -398,6 +406,7 @@ class Edit(commands.Cog, DatabaseMixin):
                 
                 # Discordメッセージを更新（エラーが無視されるように）
                 print(f"[DEBUG] Discordメッセージ更新を開始します: post_id={self.post_id}")
+                message_update_error: Optional[str] = None
                 try:
                     print(f"[DEBUG] _update_discord_message を呼び出します")
                     await self._update_discord_message(interaction, content, category, image_url)
@@ -405,21 +414,24 @@ class Edit(commands.Cog, DatabaseMixin):
                 except Exception as e:
                     logger.warning(f"Discordメッセージの更新に失敗しましたが、データベースは更新されています: {e}", exc_info=True)
                     print(f"[DEBUG] Discordメッセージ更新エラー: {e}")
-                    # ユーザーにも理由を返す（DBは更新済み）
-                    try:
-                        await interaction.followup.send(
-                            f"⚠️ データベースは更新されましたが、Discordメッセージの更新に失敗しました。\n理由: {e}",
-                            ephemeral=True
-                        )
-                    except Exception:
-                        pass
+                    # NOTE: Modal interaction では response 前の followup が失敗することがあるため、
+                    # ここでは followup を送らず、最終レスポンスに必ず含める。
+                    message_update_error = str(e)
                 print(f"[DEBUG] Discordメッセージ更新処理を終了します")
                 
                 # 成功メッセージを送信
-                await interaction.response.send_message(
-                    f"✅ 投稿を更新しました！ (ID: {self.post_id})",
-                    ephemeral=True
-                )
+                if message_update_error:
+                    await interaction.response.send_message(
+                        f"⚠️ 投稿内容はデータベースに保存されましたが、Discordメッセージの編集に失敗しました。\n"
+                        f"投稿ID: {self.post_id}\n"
+                        f"理由: {message_update_error}",
+                        ephemeral=True
+                    )
+                else:
+                    await interaction.response.send_message(
+                        f"✅ 投稿を更新しました！ (ID: {self.post_id})",
+                        ephemeral=True
+                    )
                 
                 logger.info(f"投稿を更新しました: id={self.post_id}")
                 
@@ -503,28 +515,47 @@ class Edit(commands.Cog, DatabaseMixin):
                         
                         # 表示名を設定
                         print(f"[DEBUG] メッセージ更新時: is_anonymous={self._is_anonymous}")
-                        
-                        # 根本的修正：データベースから現在の状態を再取得
-                        cursor.execute('SELECT is_anonymous FROM thoughts WHERE id = ?', (self.post_id,))
-                        current_db_anonymous = bool(cursor.fetchone()[0])
-                        print(f"[DEBUG] データベース現在値: is_anonymous={current_db_anonymous}")
-                        
-                        # データベースの値を強制使用
+
+                        # DBから投稿者情報を取得（管理者編集でも投稿者情報を維持する）
+                        cursor.execute(
+                            'SELECT user_id, is_anonymous, display_name FROM thoughts WHERE id = ?',
+                            (self.post_id,)
+                        )
+                        row = cursor.fetchone()
+                        if not row:
+                            raise RuntimeError(f"投稿が見つかりません (post_id={self.post_id})")
+
+                        post_user_id, db_is_anonymous, db_display_name = row
+                        current_db_anonymous = bool(db_is_anonymous)
+                        print(f"[DEBUG] データベース現在値: is_anonymous={current_db_anonymous}, display_name={db_display_name}, user_id={post_user_id}")
+
                         if current_db_anonymous:
                             embed.set_author(name='匿名ユーザー', icon_url=DEFAULT_AVATAR)
                             print(f"[DEBUG] データベース値で匿名ユーザー: {DEFAULT_AVATAR}")
                         else:
-                            # 新しい表示名が入力された場合（無効化されている場合は無視）
-                            new_display_name = None
-                            if not self.display_name_input.disabled and self.display_name_input.value.strip():
-                                new_display_name = self.display_name_input.value.strip()
-                            
-                            display_name = new_display_name or str(interaction.user)
-                            embed.set_author(
-                                name=display_name,
-                                icon_url=interaction.user.display_avatar.url
-                            )
-                            print(f"[DEBUG] データベース値で通常ユーザー: {display_name}")
+                            author_user = self.bot.get_user(int(post_user_id))
+                            if author_user is None:
+                                try:
+                                    author_user = await self.bot.fetch_user(int(post_user_id))
+                                except Exception:
+                                    author_user = None
+
+                            author_name = (db_display_name or None)
+                            if not author_name:
+                                author_name = str(author_user) if author_user else f"User {post_user_id}"
+
+                            author_icon = None
+                            if author_user:
+                                try:
+                                    author_icon = author_user.display_avatar.url
+                                except Exception:
+                                    author_icon = None
+
+                            if author_icon:
+                                embed.set_author(name=author_name, icon_url=author_icon)
+                            else:
+                                embed.set_author(name=author_name)
+                            print(f"[DEBUG] データベース値で通常ユーザー: {author_name}")
                         
                         # フッターにカテゴリーと投稿IDを表示
                         embed.set_footer(text=f'カテゴリー: {category or "未設定"} | ID: {self.post_id}')
