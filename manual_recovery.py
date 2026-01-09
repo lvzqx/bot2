@@ -2,7 +2,6 @@ import sqlite3
 import discord
 from discord.ext import commands
 import os
-from datetime import datetime
 from config import CHANNELS, DEFAULT_AVATAR
 
 # 手動データ復元スクリプト
@@ -38,8 +37,14 @@ async def manual_data_recovery(bot):
     
     recovered_count = 0
     
+    # チャンネルIDを直接指定
+    channel_configs = [
+        ('public', 1457611087561101332),
+        ('private', 1457611128225009666)
+    ]
+    
     # 各チャンネルをスキャン
-    for channel_type, channel_id in CHANNELS.items():
+    for channel_type, channel_id in channel_configs:
         channel = bot.get_channel(channel_id)
         if not channel:
             print(f"チャンネル {channel_id} が見つかりません")
