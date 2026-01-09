@@ -131,8 +131,12 @@ class Edit(commands.Cog, DatabaseMixin):
             self._interaction: Optional[discord.Interaction] = None
             
             # 状態管理
-            self._is_anonymous: bool = current_is_anonymous
-            self._is_private: bool = current_is_private
+            self._is_anonymous: bool = bool(current_is_anonymous)
+            self._is_private: bool = bool(current_is_private)
+            
+            # デバッグログ
+            print(f"[DEBUG] EditModal初期化: is_anonymous={self._is_anonymous}, is_private={self._is_private}")
+            print(f"[DEBUG] 受け取った値: current_is_anonymous={current_is_anonymous}, current_is_private={current_is_private}")
             
             # コンポーネントの作成
             self.content = self.content_input = ui.TextInput(
@@ -789,6 +793,10 @@ class Edit(commands.Cog, DatabaseMixin):
                     return
                 
                 current_content, current_category, current_image_url, current_is_anonymous, current_is_private, post_user_id = post
+                
+                # デバッグログ
+                print(f"[DEBUG] データベースから取得: is_anonymous={current_is_anonymous}, type={type(current_is_anonymous)}")
+                print(f"[DEBUG] bool変換後: {bool(current_is_anonymous)}")
                 
                 # 権限チェック（投稿者本人または管理者のみ編集可能）
                 is_owner = post_user_id == interaction.user.id
