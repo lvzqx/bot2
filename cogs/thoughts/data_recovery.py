@@ -5,6 +5,7 @@ import sqlite3
 import logging
 from typing import Optional
 from bot import DatabaseMixin
+from config import DEFAULT_AVATAR
 
 logger = logging.getLogger(__name__)
 
