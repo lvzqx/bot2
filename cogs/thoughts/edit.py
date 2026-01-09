@@ -477,9 +477,9 @@ class Edit(commands.Cog, DatabaseMixin):
                         # フッターにカテゴリーと投稿IDを表示
                         # フッター設定（カテゴリーがない場合はIDのみ）
                         if category:
-                            embed.set_footer(text=f'カテゴリー: {category} | ID: {self.post_id}')
+                            embed.set_footer(text=f'カテゴリー: {category} | 投稿ID: {self.post_id}')
                         else:
-                            embed.set_footer(text=f'ID: {self.post_id}')
+                            embed.set_footer(text=f'投稿ID: {self.post_id}')
                         
                         # 画像があれば追加
                         if image_url:
