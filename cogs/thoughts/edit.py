@@ -165,25 +165,10 @@ class Edit(commands.Cog, DatabaseMixin):
                 required=False
             )
             
-            # 表示名入力（常に作成し、匿名状態で制御）
-            self.display_name = self.display_name_input = ui.TextInput(
-                label="表示名（任意）",
-                style=discord.TextStyle.short,
-                placeholder="変更する場合のみ入力（空白で元のユーザー名）",
-                default="",  # 現在の表示名は表示しない
-                max_length=32,
-                required=False
-            )
-            
-            # 匿名の場合は表示名入力を無効化
-            if current_is_anonymous:
-                self.display_name_input.placeholder = "匿名投稿のため表示名は変更できません"
-            
             # コンポーネントを追加
             self.add_item(self.content_input)
             self.add_item(self.category_input)
             self.add_item(self.image_url_input)
-            self.add_item(self.display_name_input)  # 常に追加
         
         @contextmanager
         def _get_db_connection(self) -> Iterator[sqlite3.Connection]:
@@ -248,10 +233,7 @@ class Edit(commands.Cog, DatabaseMixin):
             content = self.content_input.value.strip()
             category = self.category_input.value.strip() if self.category_input.value else None
             image_url = self.image_url_input.value.strip() if self.image_url_input.value else None
-            display_name = None
-            if not self._is_anonymous:
-                raw_display_name = self.display_name_input.value.strip() if self.display_name_input.value else ""
-                display_name = raw_display_name or None
+            display_name = None  # 表示名はDBから取得するため入力しない
             
             if not content:
                 await interaction.response.send_message(
@@ -317,7 +299,6 @@ class Edit(commands.Cog, DatabaseMixin):
                                 image_url = ?, 
                                 is_anonymous = ?, 
                                 is_private = ?,
-                                display_name = ?,
                                 updated_at = CURRENT_TIMESTAMP
                             WHERE id = ?
                         """, (
@@ -326,7 +307,6 @@ class Edit(commands.Cog, DatabaseMixin):
                             image_url,
                             int(self._is_anonymous),
                             int(self._is_private),
-                            None if self._is_anonymous else display_name,
                             self.post_id
                         ))
                         print(f"[DEBUG] データベース更新完了: rowcount={cursor.rowcount}")
