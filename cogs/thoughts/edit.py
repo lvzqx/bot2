@@ -161,10 +161,25 @@ class Edit(commands.Cog, DatabaseMixin):
                 required=False
             )
             
+            # 表示名入力（匿名でない場合のみ）
+            if not current_is_anonymous:
+                self.display_name = self.display_name_input = ui.TextInput(
+                    label="表示名（任意）",
+                    style=discord.TextStyle.short,
+                    placeholder="新しい表示名を入力...",
+                    default="",  # 現在の表示名は表示しない
+                    max_length=32,
+                    required=False
+                )
+            else:
+                self.display_name = None
+            
             # コンポーネントを追加
             self.add_item(self.content_input)
             self.add_item(self.category_input)
             self.add_item(self.image_url_input)
+            if self.display_name:
+                self.add_item(self.display_name_input)
             
             # トグルボタン用のビュー
             self.toggle_view = ui.View(timeout=None)
