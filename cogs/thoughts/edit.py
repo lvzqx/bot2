@@ -367,6 +367,7 @@ class Edit(commands.Cog, DatabaseMixin):
                 with self._get_db_connection() as conn:
                     with self._get_cursor(conn) as cursor:
                         # 投稿を更新
+                        print(f"[DEBUG] データベース更新前: is_anonymous={self._is_anonymous}, is_private={self._is_private}")
                         cursor.execute("""
                             UPDATE thoughts 
                             SET content = ?, 
@@ -384,6 +385,7 @@ class Edit(commands.Cog, DatabaseMixin):
                             int(self._is_private),
                             self.post_id
                         ))
+                        print(f"[DEBUG] データベース更新完了: rowcount={cursor.rowcount}")
                         
                         if cursor.rowcount == 0:
                             await interaction.response.send_message(

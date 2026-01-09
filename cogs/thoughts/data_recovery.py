@@ -184,6 +184,14 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                                     
                                     # 匿名設定を判定
                                     is_anonymous = embed.author.name == "匿名ユーザー"
+                                    print(f"[DEBUG] 復元時の匿名判定: author.name='{embed.author.name}', is_anonymous={is_anonymous}")
+                                    
+                                    # アイコンも確認
+                                    if hasattr(embed.author, 'icon_url') and embed.author.icon_url:
+                                        is_anonymous_by_icon = embed.author.icon_url == DEFAULT_AVATAR
+                                        print(f"[DEBUG] アイコンによる匿名判定: icon_url='{embed.author.icon_url}', is_anonymous_by_icon={is_anonymous_by_icon}")
+                                        # どちらか一方でも匿名なら匿名として扱う
+                                        is_anonymous = is_anonymous or is_anonymous_by_icon
                                     
                                     # 非公開設定を判定（親チャンネルから判定）
                                     is_private = not any(ch.id == channel.id for ch in channels if ch.name and "公開" in ch.name)
@@ -200,11 +208,12 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                                                 post_id,
                                                 content,
                                                 category,
-                                                is_anonymous,
-                                                is_private,
+                                                int(is_anonymous),  # 明示的にintに変換
+                                                int(is_private),
                                                 interaction.user.id,  # 復元実行者のID
                                                 message.created_at
                                             ))
+                                            print(f"[DEBUG] データベース挿入: post_id={post_id}, is_anonymous={int(is_anonymous)}, is_private={int(is_private)}")
                                             
                                             # メッセージ参照を追加
                                             cursor.execute('''

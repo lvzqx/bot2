@@ -123,7 +123,13 @@ class Delete(commands.Cog, DatabaseMixin):
                     else:
                         return False, None  # 投稿が見つからない
                     
-                    # 投稿を削除（外部キー制約により関連するメッセージ参照も削除される）
+                    # メッセージ参照を先に削除
+                    cursor.execute('''
+                        DELETE FROM message_references 
+                        WHERE post_id = ?
+                    ''', (post_id,))
+                    
+                    # 投稿を削除
                     cursor.execute('''
                         DELETE FROM thoughts 
                         WHERE id = ?
@@ -216,16 +222,31 @@ class Delete(commands.Cog, DatabaseMixin):
                                     logger.error(f"メッセージ削除中にエラー: {e}")
                                 
                                 # データベースから投稿を削除
-                                success, was_private = await self._delete_post(post_id, interaction.user.id, is_admin)
-                                
-                                if success:
+                                try:
+                                    with self._get_db_connection() as conn:
+                                        with self._get_cursor(conn) as cursor:
+                                            # メッセージ参照を先に削除
+                                            cursor.execute('''
+                                                DELETE FROM message_references 
+                                                WHERE post_id = ?
+                                            ''', (post_id,))
+                                            
+                                            # 投稿を削除
+                                            cursor.execute('''
+                                                DELETE FROM thoughts 
+                                                WHERE id = ?
+                                            ''', (post_id,))
+                                            
+                                            conn.commit()
+                                            
                                     await interaction.followup.send(
                                         "✅ 投稿を削除しました。（メッセージとデータベースから削除）",
                                         ephemeral=True
                                     )
-                                else:
+                                except Exception as e:
+                                    logger.error(f"データベース削除中にエラー: {e}")
                                     await interaction.followup.send(
-                                        "❌ データベースからの削除に失敗しました。",
+                                        "❌ データベース削除中にエラーが発生しました。",
                                         ephemeral=True
                                     )
                             else:
