@@ -3,6 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 import sqlite3
 import logging
+from typing import Optional
 from bot import DatabaseMixin
 
 logger = logging.getLogger(__name__)
