@@ -478,8 +478,11 @@ class Edit(commands.Cog, DatabaseMixin):
                         if self._is_anonymous:
                             embed.set_author(name='匿名ユーザー', icon_url=DEFAULT_AVATAR)
                         else:
+                            # 新しい表示名が入力された場合
+                            new_display_name = self.display_name_input.value.strip() if self.display_name and self.display_name_input.value.strip() else None
+                            display_name = new_display_name or str(interaction.user)
                             embed.set_author(
-                                name=str(interaction.user),
+                                name=display_name,
                                 icon_url=interaction.user.display_avatar.url
                             )
                         
@@ -603,8 +606,11 @@ class Edit(commands.Cog, DatabaseMixin):
                         if self._is_anonymous:
                             embed.set_author(name='匿名ユーザー', icon_url=DEFAULT_AVATAR)
                         else:
+                            # 新しい表示名が入力された場合
+                            new_display_name = self.display_name_input.value.strip() if self.display_name and self.display_name_input.value.strip() else None
+                            display_name = new_display_name or str(interaction.user)
                             embed.set_author(
-                                name=str(interaction.user),
+                                name=display_name,
                                 icon_url=interaction.user.display_avatar.url
                             )
                         
