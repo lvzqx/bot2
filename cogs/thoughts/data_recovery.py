@@ -125,6 +125,9 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                             if original_user_id is None and not is_anonymous:
                                 # 非匿名でUIDがない場合は復元実行者のIDを暫定使用
                                 original_user_id = interaction.user.id
+                            elif original_user_id is None and is_anonymous:
+                                # 匿名の場合は復元実行者のIDを設定（NOT NULL制約のため）
+                                original_user_id = interaction.user.id
                             
                             # 非公開設定を判定（チャンネルから判定）
                             is_private = not any(ch.id == channel.id for ch in channels if ch.name and "公開" in ch.name)
