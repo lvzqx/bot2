@@ -42,7 +42,7 @@ class List(commands.Cog, DatabaseMixin):
         """
         conn = None
         try:
-            conn = sqlite3.connect(self.bot.db_path)  # ボットのDBパスを使用
+            conn = sqlite3.connect(self.db_path)
             conn.execute("PRAGMA foreign_keys = ON")
             conn.execute("PRAGMA journal_mode = WAL")
             conn.execute("PRAGMA synchronous = NORMAL")
@@ -89,7 +89,7 @@ class List(commands.Cog, DatabaseMixin):
         try:
             with self._get_db_connection() as conn:
                 with self._get_cursor(conn) as cursor:
-                    # 必要なデータを一度のクエリで取得（サブクエリを使用）
+                    # message_references経由で取得（より確実）
                     cursor.execute('''
                         SELECT 
                             t.id, 
@@ -100,6 +100,7 @@ class List(commands.Cog, DatabaseMixin):
                             t.display_name,
                             t.image_url
                         FROM thoughts t
+                        INNER JOIN message_references mr ON t.id = mr.post_id
                         WHERE t.user_id = ?
                         ORDER BY t.created_at DESC
                         LIMIT ?
