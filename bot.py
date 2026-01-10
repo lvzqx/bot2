@@ -35,12 +35,9 @@ intents.members = True
 class DatabaseMixin:
     """データベース操作のミックスインクラス"""
     
-    def __init__(self, bot=None):
-        # botが渡された場合はbot.db_pathを、なければ環境変数からデータベースパスを取得
-        if bot and hasattr(bot, 'db_path'):
-            self.db_path = bot.db_path
-        else:
-            self.db_path = os.getenv('DB_PATH', 'thoughts.db')
+    def __init__(self):
+        # 環境変数からデータベースパスを取得、なければデフォルト値を使用
+        self.db_path = os.getenv('DB_PATH', 'thoughts.db')
         self._init_db()
     
     def _init_db(self):

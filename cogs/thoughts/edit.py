@@ -48,8 +48,7 @@ class Edit(commands.Cog, DatabaseMixin):
             bot: Discord Bot インスタンス
         """
         self.bot: commands.Bot = bot
-        # DatabaseMixin を正しく初期化
-        DatabaseMixin.__init__(self, bot)
+        DatabaseMixin.__init__(self)
         logger.info("Edit cog が初期化されました")
     
     @contextmanager

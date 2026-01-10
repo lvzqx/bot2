@@ -27,8 +27,7 @@ class List(commands.Cog, DatabaseMixin):
             bot: Discord Bot インスタンス
         """
         self.bot: commands.Bot = bot
-        # DatabaseMixin を正しく初期化
-        DatabaseMixin.__init__(self, bot)
+        DatabaseMixin.__init__(self)
         logger.info("List cog が初期化されました")
     
     @contextmanager
@@ -43,7 +42,7 @@ class List(commands.Cog, DatabaseMixin):
         """
         conn = None
         try:
-            conn = sqlite3.connect(self.db_path)
+            conn = sqlite3.connect(self.bot.db_path)
             conn.execute("PRAGMA foreign_keys = ON")
             conn.execute("PRAGMA journal_mode = WAL")
             conn.execute("PRAGMA synchronous = NORMAL")
@@ -90,10 +89,6 @@ class List(commands.Cog, DatabaseMixin):
         try:
             with self._get_db_connection() as conn:
                 with self._get_cursor(conn) as cursor:
-                    # デバッグログ
-                    logger.info(f"[DEBUG] user_id: {user_id}")
-                    logger.info(f"[DEBUG] limit: {limit}")
-                    
                     # 必要なデータを一度のクエリで取得（サブクエリを使用）
                     cursor.execute('''
                         SELECT 
@@ -103,8 +98,7 @@ class List(commands.Cog, DatabaseMixin):
                             t.created_at, 
                             t.is_private, 
                             t.display_name,
-                            t.image_url,
-                            t.user_id
+                            t.image_url
                         FROM thoughts t
                         WHERE t.user_id = ?
                         ORDER BY t.created_at DESC
@@ -113,14 +107,7 @@ class List(commands.Cog, DatabaseMixin):
                     
                     # 結果を辞書のリストとして取得
                     columns = [column[0] for column in cursor.description]
-                    rows = cursor.fetchall()
-                    
-                    # デバッグログ
-                    logger.info(f"[DEBUG] 取得件数: {len(rows)}")
-                    for row in rows:
-                        logger.info(f"[DEBUG] row: {dict(zip(columns, row))}")
-                    
-                    posts = [dict(zip(columns, row)) for row in rows]
+                    return [dict(zip(columns, row)) for row in cursor.fetchall()]
                     
         except sqlite3.Error as e:
             logger.error(f"投稿の取得中にエラーが発生しました: {e}", exc_info=True)

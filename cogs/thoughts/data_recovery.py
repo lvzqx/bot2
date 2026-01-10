@@ -14,8 +14,7 @@ class DataRecovery(commands.Cog, DatabaseMixin):
     
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        # DatabaseMixin を正しく初期化
-        DatabaseMixin.__init__(self, bot)
+        DatabaseMixin.__init__(self)
     
     @app_commands.command(name="recover_from_messages", description="Discordメッセージからデータベースを復元します")
     @app_commands.default_permissions(administrator=True)
