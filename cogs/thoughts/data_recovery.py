@@ -14,7 +14,8 @@ class DataRecovery(commands.Cog, DatabaseMixin):
     
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        DatabaseMixin.__init__(self)
+        # DatabaseMixin の db_path を手動で設定
+        self.db_path = bot.db_path
     
     @app_commands.command(name="recover_from_messages", description="Discordメッセージからデータベースを復元します")
     @app_commands.default_permissions(administrator=True)

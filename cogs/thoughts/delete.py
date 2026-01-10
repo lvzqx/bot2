@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 class Delete(commands.Cog, DatabaseMixin):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        DatabaseMixin.__init__(self)
+        # DatabaseMixin の db_path を手動で設定
+        self.db_path = bot.db_path
         logger.info("Delete cog が初期化されました")
 
     @contextmanager
