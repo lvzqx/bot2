@@ -42,7 +42,7 @@ class List(commands.Cog, DatabaseMixin):
         """
         conn = None
         try:
-            conn = sqlite3.connect(self.bot.db_path)
+            conn = sqlite3.connect(self.bot.db_path)  # ボットのDBパスを使用
             conn.execute("PRAGMA foreign_keys = ON")
             conn.execute("PRAGMA journal_mode = WAL")
             conn.execute("PRAGMA synchronous = NORMAL")
@@ -87,12 +87,9 @@ class List(commands.Cog, DatabaseMixin):
             sqlite3.Error: データベース操作に失敗した場合
         """
         try:
-            # デバッグ情報を追加
-            print(f"[DEBUG] _fetch_user_posts: user_id={user_id}, db_path={self.bot.db_path}")
-            
             with self._get_db_connection() as conn:
                 with self._get_cursor(conn) as cursor:
-                    # 必要なデータを一度のクエリで取得
+                    # 必要なデータを一度のクエリで取得（サブクエリを使用）
                     cursor.execute('''
                         SELECT 
                             t.id, 
@@ -110,10 +107,7 @@ class List(commands.Cog, DatabaseMixin):
                     
                     # 結果を辞書のリストとして取得
                     columns = [column[0] for column in cursor.description]
-                    results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-                    print(f"[DEBUG] 取得件数: {len(results)}")
-                    
-                    return results
+                    return [dict(zip(columns, row)) for row in cursor.fetchall()]
                     
         except sqlite3.Error as e:
             logger.error(f"投稿の取得中にエラーが発生しました: {e}", exc_info=True)
@@ -143,10 +137,6 @@ class List(commands.Cog, DatabaseMixin):
             # 即座に応答して処理中であることを伝える
             await interaction.response.defer(ephemeral=True)
             logger.info(f"投稿一覧の取得を開始: user_id={interaction.user.id}, limit={limit}")
-            
-            # デバッグ情報を追加
-            logger.info(f"投稿一覧の取得を開始: user_id={interaction.user.id}, db_path={self.bot.db_path}")
-            print(f"[DEBUG] 投稿一覧取得: user_id={interaction.user.id}, db_path={self.bot.db_path}")
             
             # 入力バリデーション
             limit = max(1, min(25, limit))  # 1〜25件に制限
