@@ -90,37 +90,11 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                             if not content:
                                 continue
                             
-                            # 投稿者情報を取得（元のメッセージの投稿者）
-                            original_author_id = None
-                            try:
-                                # スレッドの場合は最初のメッセージの投稿者を取得
-                                if hasattr(channel, 'thread') and channel.thread:
-                                    # スレッドの作成者を取得
-                                    original_author_id = channel.thread.owner_id if channel.thread.owner_id else None
-                                else:
-                                    # 通常チャンネルの場合、メッセージ履歴から投稿者を探す
-                                    async for original_message in channel.history(limit=None, before=message):
-                                        if not original_message.author.bot and original_message.content:
-                                            original_author_id = original_message.author.id
-                                            break
-                            except Exception as e:
-                                print(f"[DEBUG] 投稿者取得エラー: {e}")
-                                original_author_id = None
-                            
-                            # 投稿者が特定できない場合は復元実行者のIDを使用
-                            if not original_author_id:
-                                original_author_id = interaction.user.id
-                            
                             # フッターから投稿IDを抽出
                             footer_text = embed.footer.text if embed.footer else ""
                             post_id = None
                             
-                            if "投稿ID:" in footer_text:
-                                try:
-                                    post_id = int(footer_text.split("投稿ID:")[1].strip())
-                                except (ValueError, IndexError):
-                                    pass
-                            elif "ID:" in footer_text:  # 旧形式対応
+                            if "ID:" in footer_text:
                                 try:
                                     post_id = int(footer_text.split("ID:")[1].strip())
                                 except (ValueError, IndexError):
@@ -136,8 +110,21 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                                 except (IndexError, AttributeError):
                                     pass
                             
+                            # 投稿者IDを抽出
+                            original_user_id = None
+                            if "UID:" in footer_text:
+                                try:
+                                    original_user_id = int(footer_text.split("UID:")[1].strip())
+                                except (ValueError, IndexError):
+                                    pass
+                            
                             # 匿名設定を判定
                             is_anonymous = embed.author.name == "匿名ユーザー"
+                            
+                            # UIDが抽出できなかった場合の処理
+                            if original_user_id is None and not is_anonymous:
+                                # 非匿名でUIDがない場合は復元実行者のIDを暫定使用
+                                original_user_id = interaction.user.id
                             
                             # 非公開設定を判定（チャンネルから判定）
                             is_private = not any(ch.id == channel.id for ch in channels if ch.name and "公開" in ch.name)
@@ -156,7 +143,7 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                                         category,
                                         is_anonymous,
                                         is_private,
-                                        original_author_id,  # 取得した投稿者ID
+                                        original_user_id,  # 匿名の場合はNULL、非匿名の場合は復元実行者のID（暫定）
                                         message.created_at
                                     ))
                                     
@@ -189,19 +176,11 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                                     if not content:
                                         continue
                                     
-                                    # 投稿者情報を取得（スレッドの作成者）
-                                    original_author_id = thread.owner_id if thread.owner_id else interaction.user.id
-                                    
                                     # フッターから投稿IDを抽出
                                     footer_text = embed.footer.text if embed.footer else ""
                                     post_id = None
                                     
-                                    if "投稿ID:" in footer_text:
-                                        try:
-                                            post_id = int(footer_text.split("投稿ID:")[1].strip())
-                                        except (ValueError, IndexError):
-                                            pass
-                                    elif "ID:" in footer_text:  # 旧形式対応
+                                    if "ID:" in footer_text:
                                         try:
                                             post_id = int(footer_text.split("ID:")[1].strip())
                                         except (ValueError, IndexError):
@@ -245,7 +224,7 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                                                 category,
                                                 int(is_anonymous),  # 明示的にintに変換
                                                 int(is_private),
-                                                original_author_id,  # 取得した投稿者ID
+                                                interaction.user.id,  # 復元実行者のID
                                                 message.created_at
                                             ))
                                             print(f"[DEBUG] データベース挿入: post_id={post_id}, is_anonymous={int(is_anonymous)}, is_private={int(is_private)}")

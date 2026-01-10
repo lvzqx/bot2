@@ -144,6 +144,7 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
             'cogs.thoughts.edit',
             'cogs.thoughts.restore_messages',  # メッセージ整理用
             'cogs.thoughts.data_recovery',  # データ復元用
+            'cogs.thoughts.user_fix',  # 投稿者情報修正用
             'cogs.thoughts.help',
         ]
         
