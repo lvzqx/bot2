@@ -5,7 +5,8 @@ on:
     branches: [ main ]
   workflow_dispatch:
   schedule:
-    - cron: '0,15,30,45 * * * *'  # 日本時間の09,00,15,30,45分（UTC-9）
+    - cron: '0 */6 * * *'  # 6時間ごとにチェック（UTC）
+    - cron: '0 0,6,12,18 * * *'  # 日本時間0時、6時、12時、18時（UTC-9）
 
 jobs:
   run-bot:
