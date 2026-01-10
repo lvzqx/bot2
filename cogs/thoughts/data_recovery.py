@@ -122,12 +122,10 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                             is_anonymous = embed.author.name == "匿名ユーザー"
                             
                             # UIDが抽出できなかった場合の処理
-                            if original_user_id is None and not is_anonymous:
-                                # 非匿名でUIDがない場合は復元実行者のIDを暫定使用
-                                original_user_id = interaction.user.id
-                            elif original_user_id is None and is_anonymous:
-                                # 匿名の場合は復元実行者のIDを設定（NOT NULL制約のため）
-                                original_user_id = interaction.user.id
+                            if original_user_id is None:
+                                # UIDがない場合は特別なID（0）を設定して復元
+                                original_user_id = 0  # 不明な投稿者としてマーク
+                                print(f"[DEBUG] 投稿ID {post_id}: UIDがないため不明な投稿者として復元します")
                             
                             # 非公開設定を判定（チャンネルから判定）
                             is_private = not any(ch.id == channel.id for ch in channels if ch.name and "公開" in ch.name)

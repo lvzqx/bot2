@@ -100,7 +100,7 @@ class List(commands.Cog, DatabaseMixin):
                             t.display_name,
                             t.image_url
                         FROM thoughts t
-                        WHERE t.user_id = ?
+                        WHERE t.user_id = ? AND t.user_id != 0
                         ORDER BY t.created_at DESC
                         LIMIT ?
                     ''', (user_id, limit))
