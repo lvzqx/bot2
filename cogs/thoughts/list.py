@@ -27,8 +27,8 @@ class List(commands.Cog, DatabaseMixin):
             bot: Discord Bot インスタンス
         """
         self.bot: commands.Bot = bot
-        # DatabaseMixin の db_path を手動で設定
-        self.db_path = bot.db_path
+        # DatabaseMixin を正しく初期化
+        DatabaseMixin.__init__(self, bot)
         logger.info("List cog が初期化されました")
     
     @contextmanager
