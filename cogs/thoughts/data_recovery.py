@@ -116,6 +116,45 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                             # 非公開設定を判定（チャンネルから判定）
                             is_private = not any(ch.id == channel.id for ch in channels if ch.name and "公開" in ch.name)
                             
+                            # 元の投稿者IDを取得
+                            original_user_id = None
+                            
+                            # 方法1: Webhookメッセージから元の投稿者IDを取得
+                            if message.webhook_id:
+                                # Webhookの場合、メッセージの内容から元の投稿者を特定できない
+                                # この場合はNULLのままにする（後で手動修正が必要）
+                                pass
+                            else:
+                                # 方法2: Embedのauthor情報から推測
+                                if embed.author and embed.author.name != "匿名ユーザー":
+                                    # 非匿名の場合、Embed author名からユーザーを検索
+                                    try:
+                                        # サーバー内で一致するユーザーを検索
+                                        guild = interaction.guild
+                                        if guild:
+                                            member = guild.get_member_named(embed.author.name)
+                                            if member:
+                                                original_user_id = member.id
+                                            else:
+                                                # 部分一致で検索
+                                                for member in guild.members:
+                                                    if embed.author.name in str(member):
+                                                        original_user_id = member.id
+                                                        break
+                                    except Exception:
+                                        pass
+                            
+                            # 方法3: 過去のDBに同じ投稿IDがあれば参照
+                            if not original_user_id and post_id:
+                                cursor.execute('SELECT user_id FROM thoughts WHERE id = ?', (post_id,))
+                                old_data = cursor.fetchone()
+                                if old_data and old_data[0]:
+                                    original_user_id = old_data[0]
+                            
+                            # それでも見つからない場合は復元実行者のID（暫定）
+                            if not original_user_id:
+                                original_user_id = interaction.user.id
+                            
                             # データベースに存在しないことを確認
                             if post_id:
                                 cursor.execute('SELECT id FROM thoughts WHERE id = ?', (post_id,))
@@ -130,7 +169,7 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                                         category,
                                         is_anonymous,
                                         is_private,
-                                        interaction.user.id,  # 復元実行者のID
+                                        original_user_id,  # 元の投稿者IDを使用
                                         message.created_at
                                     ))
                                     

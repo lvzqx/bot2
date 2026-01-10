@@ -89,7 +89,7 @@ class List(commands.Cog, DatabaseMixin):
         try:
             with self._get_db_connection() as conn:
                 with self._get_cursor(conn) as cursor:
-                    # message_references経由で取得（より確実）
+                    # 必要なデータを一度のクエリで取得（サブクエリを使用）
                     cursor.execute('''
                         SELECT 
                             t.id, 
@@ -100,7 +100,6 @@ class List(commands.Cog, DatabaseMixin):
                             t.display_name,
                             t.image_url
                         FROM thoughts t
-                        INNER JOIN message_references mr ON t.id = mr.post_id
                         WHERE t.user_id = ?
                         ORDER BY t.created_at DESC
                         LIMIT ?
