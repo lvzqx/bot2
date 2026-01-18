@@ -126,25 +126,41 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                                 except (IndexError, AttributeError):
                                     pass
                             
-                            # 投稿者IDを抽出
+                            # 投稿者IDを取得（複数方法で試行）
                             original_user_id = None
+                            
+                            # 方法1: Embed footerからUIDを抽出
                             has_uid = "UID:" in footer_text
                             if has_uid:
                                 try:
                                     original_user_id = int(footer_text.split("UID:")[1].strip())
+                                    print(f"[DEBUG] 投稿ID {post_id}: FooterからUID={original_user_id} を検出")
                                 except (ValueError, IndexError):
                                     print(f"[DEBUG] 投稿ID {post_id}: UIDの解析に失敗しました")
                                     pass
-                            else:
-                                print(f"[DEBUG] 投稿ID {post_id}: UIDが見つかりません")
                             
-                            # UIDが抽出できなかった場合の処理
+                            # 方法2: メッセージIDからmessage_referencesを検索
                             if original_user_id is None:
-                                # UIDがない場合は復元しない（スキップ）
-                                print(f"[DEBUG] 投稿ID {post_id}: UIDがないため復元をスキップします")
-                                continue
-                            else:
-                                print(f"[DEBUG] 投稿ID {post_id}: UID={original_user_id} を検出、復元します")
+                                try:
+                                    cursor.execute('''
+                                        SELECT t.user_id 
+                                        FROM thoughts t
+                                        JOIN message_references mr ON t.id = mr.post_id
+                                        WHERE mr.message_id = ?
+                                    ''', (str(message.id),))
+                                    ref_result = cursor.fetchone()
+                                    if ref_result and ref_result[0]:
+                                        original_user_id = ref_result[0]
+                                        print(f"[DEBUG] 投稿ID {post_id}: MessageReferencesからuser_id={original_user_id} を検出")
+                                except Exception as e:
+                                    print(f"[DEBUG] 投稿ID {post_id}: MessageReferences検索エラー: {e}")
+                            
+                            # 方法3: メッセージ内容から投稿者を推定（最終手段）
+                            if original_user_id is None:
+                                # メッセージのembed内容から投稿者を特定できない場合は、
+                                # 復元実行者のIDを使用せずに不明としてマーク
+                                print(f"[DEBUG] 投稿ID {post_id}: 投稿者を特定できません")
+                                original_user_id = 0  # 不明な投稿者としてマーク
                             
                             # 匿名設定を判定
                             is_anonymous = embed.author.name == "匿名ユーザー"

@@ -166,7 +166,6 @@ class Post(commands.Cog):
                 if category:
                     footer_parts.append(f"カテゴリ: {category}")
                 footer_parts.append(f"投稿ID: {post_id}")
-                # すべての投稿にUIDを含める（復元用）
                 # UIDは表示しない（裏でのみ保存）
                 embed.set_footer(text=" | ".join(footer_parts))
                 
