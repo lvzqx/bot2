@@ -23,27 +23,20 @@ class Delete(commands.Cog, DatabaseMixin):
         
         # 応答を遅延
         await interaction.response.defer(ephemeral=True)
-        logger.info(f"デバッグ: defer完了、削除処理を開始")
         
         try:
             # メッセージIDで投稿を検索
-            logger.info(f"デバッグ: データベース接続を開始")
             with self._get_db_connection() as conn:
                 with self._get_cursor(conn) as cursor:
-                    logger.info(f"デバッグ: SQLクエリを実行 - message_id={message_id}")
                     cursor.execute('''
                         SELECT mr.post_id, mr.channel_id, t.user_id, t.is_private
                         FROM message_references mr
                         JOIN thoughts t ON mr.post_id = t.id
                         WHERE mr.message_id = ?
-                    ''', (str(message_id),))  # 文字列として確実に処理
+                    ''', (str(message_id),))
                     
-                    logger.info(f"デバッグ: SQLクエリ完了、結果を取得")
                     row = cursor.fetchone()
-                    logger.info(f"デバッグ: 取得結果={row}")
-                    
                     if not row:
-                        logger.info(f"デバッグ: 投稿が見つかりません")
                         await interaction.followup.send(
                             "❌ 指定されたメッセージIDの投稿が見つかりません。",
                             ephemeral=True
@@ -107,41 +100,16 @@ class Delete(commands.Cog, DatabaseMixin):
                                 # プライベートスレッドを削除
                                 try:
                                     private_channel = interaction.guild.get_channel(1278762436569415772)  # 非公開チャンネルID
-                                    logger.info(f"デバッグ: private_channel取得={private_channel is not None}")
                                     if private_channel:
                                         thread_prefix = f"非公開投稿 - {post_user_id} ("
-                                        logger.info(f"デバッグ: thread_prefix={thread_prefix}")
-                                        logger.info(f"デバッグ: 総スレッド数={len(private_channel.threads)}")
-                                        
-                                        found_thread = False
                                         for thread in private_channel.threads:
-                                            logger.info(f"デバッグ: スレッド名='{thread.name}', prefix='{thread_prefix}', starts_with={thread.name.startswith(thread_prefix)}")
                                             if thread.name.startswith(thread_prefix):
-                                                try:
-                                                    # スレッドを完全に削除
-                                                    await thread.delete(reason="非公開投稿がなくなりました")
-                                                    logger.info(f"プライベートスレッド {thread.name} を削除しました")
-                                                    found_thread = True
-                                                    break
-                                                except discord.Forbidden as e:
-                                                    logger.error(f"デバッグ: スレッド削除権限なし - {e}")
-                                                    await interaction.followup.send(
-                                                        "❌ スレッドを削除する権限がありません。管理者に連絡してください。",
-                                                        ephemeral=True
-                                                    )
-                                                    break
-                                                except discord.HTTPException as e:
-                                                    logger.error(f"デバッグ: スレッド削除HTTPエラー - {e}")
-                                                    break
-                                        
-                                        if not found_thread:
-                                            logger.warning(f"デバッグ: 一致するスレッドが見つかりませんでした")
-                                    else:
-                                        logger.error("デバッグ: 非公開チャンネルが見つかりません")
+                                                # スレッドを完全に削除
+                                                await thread.delete(reason="非公開投稿がなくなりました")
+                                                logger.info(f"プライベートスレッド {thread.name} を削除しました")
+                                                break
                                 except Exception as e:
                                     logger.error(f"プライベートスレッドの削除中にエラーが発生しました: {e}")
-                            else:
-                                logger.info(f"デバッグ: 残り投稿数={remaining_posts}のためスレッド削除をスキップ")
                         except Exception as e:
                             logger.error(f"非公開投稿処理中にエラーが発生しました: {e}")
                     
