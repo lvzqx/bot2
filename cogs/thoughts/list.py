@@ -114,13 +114,13 @@ class List(commands.Cog, DatabaseMixin):
             raise
 
     @app_commands.command(name="list", description="自分の投稿一覧を表示します")
-    @app_commands.describe(key="個人キー")
-    async def list_posts(self, interaction: discord.Interaction, key: str) -> None:
+    @app_commands.describe(limit="表示する件数 (デフォルト: 10, 最大: 25)")
+    async def list_posts(self, interaction: discord.Interaction, limit: int = 10) -> None:
         """自分の投稿一覧を表示します
         
         Args:
             interaction: Discord インタラクションオブジェクト
-            key: 個人キー
+            limit: 表示する投稿の最大数 (1〜25)
             
         Raises:
             Exception: 予期せぬエラーが発生した場合
@@ -136,38 +136,14 @@ class List(commands.Cog, DatabaseMixin):
         try:
             # 即座に応答して処理中であることを伝える
             await interaction.response.defer(ephemeral=True)
-            logger.info(f"投稿一覧の取得を開始: user_id={interaction.user.id}")
+            logger.info(f"投稿一覧の取得を開始: user_id={interaction.user.id}, limit={limit}")
+            
+            # 入力バリデーション
+            limit = max(1, min(25, limit))  # 1〜25件に制限
             
             # データベースから投稿を取得
             try:
-                # キーを検証
-                import hashlib
-                import time
-                
-                # メンバー参加日を取得
-                try:
-                    member = interaction.guild.get_member(interaction.user.id)
-                    if member and member.joined_at:
-                        joined_at = int(member.joined_at.timestamp())
-                    else:
-                        joined_at = interaction.user.id  # フォールバック
-                except:
-                    joined_at = interaction.user.id  # フォールバック
-                
-                # ユーザー名、参加日からキーを生成
-                key_data = f"{interaction.user.name}_{joined_at}"
-                latest_key = hashlib.sha256(key_data.encode()).hexdigest()[:12]
-                
-                if key != latest_key:
-                    embed = discord.Embed(
-                        title="❌ キーが正しくありません",
-                        description="正しいキーを入力してください。",
-                        color=discord.Color.red()
-                    )
-                    return await interaction.followup.send(embed=embed, ephemeral=True)
-                else:
-                    # 正しいキーの場合はすべての投稿を取得
-                    posts = await self._fetch_user_posts(interaction.user.id, 10000)  # 無制限に近い数値
+                posts = await self._fetch_user_posts(interaction.user.id, limit)
                 
                 if not posts:
                     embed = discord.Embed(
@@ -178,12 +154,12 @@ class List(commands.Cog, DatabaseMixin):
                     return await interaction.followup.send(embed=embed, ephemeral=True)
                 
                 # ページネーションの設定
-                items_per_page = 5  # 長文対応のため5件に減らす
+                items_per_page = 3  # 1ページあたりの表示数
                 pages = []
                 
                 for i in range(0, len(posts), items_per_page):
                     embed = discord.Embed(
-                        title=f"📋 {interaction.user.display_name} さんの投稿一覧(全件)",
+                        title=f"📋 {interaction.user.display_name} さんの投稿一覧",
                         color=discord.Color.blue()
                     )
                     
@@ -195,8 +171,8 @@ class List(commands.Cog, DatabaseMixin):
                             is_private = post['is_private']
                             display_name = post['display_name'] or interaction.user.display_name
                             
-                            # 内容はすべて表示（制限なし）
-                            display_content = content
+                            # 内容が長すぎる場合は省略
+                            display_content = content[:100] + '...' if len(content) > 100 else content
                             
                             # 投稿情報を追加
                             field_value = f"{display_content}\n"

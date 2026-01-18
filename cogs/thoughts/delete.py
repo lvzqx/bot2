@@ -33,7 +33,7 @@ class Delete(commands.Cog, DatabaseMixin):
                         FROM message_references mr
                         JOIN thoughts t ON mr.post_id = t.id
                         WHERE mr.message_id = ?
-                    ''', (str(message_id),))
+                    ''', (message_id,))
                     
                     row = cursor.fetchone()
                     if not row:
@@ -57,10 +57,14 @@ class Delete(commands.Cog, DatabaseMixin):
                     
                     # メッセージを削除
                     try:
-                        channel = interaction.guild.get_channel(int(channel_id))
-                        if channel:
-                            message = await channel.fetch_message(int(message_id))
-                            await message.delete()
+                        channel = await interaction.guild.fetch_channel(int(channel_id))
+                        message = await channel.fetch_message(int(message_id))
+                        await message.delete()
+                        logger.info(f"メッセージ {message_id} を削除しました")
+                    except discord.NotFound:
+                        logger.warning(f"メッセージが見つかりません: {message_id}")
+                    except discord.Forbidden:
+                        logger.warning(f"メッセージの削除権限がありません: {message_id}")
                     except Exception as e:
                         logger.error(f"メッセージ削除中にエラー: {e}")
                     
@@ -81,7 +85,7 @@ class Delete(commands.Cog, DatabaseMixin):
                         )
                         return
                     
-                    # 非公開投稿の場合、スレッドを削除
+                    # 非公開投稿の場合、ロールを確認
                     if is_private:
                         try:
                             # 残りの非公開投稿数を確認
@@ -93,21 +97,14 @@ class Delete(commands.Cog, DatabaseMixin):
                             remaining_posts = cursor.fetchone()['count']
                             
                             if remaining_posts == 0:
-                                # プライベートスレッドを削除
-                                try:
-                                    private_channel = interaction.guild.get_channel(1278762436569415772)  # 非公開チャンネルID
-                                    if private_channel:
-                                        thread_prefix = f"非公開投稿 - {post_user_id} ("
-                                        for thread in private_channel.threads:
-                                            if thread.name.startswith(thread_prefix):
-                                                # スレッドを完全に削除
-                                                await thread.delete(reason="非公開投稿がなくなりました")
-                                                logger.info(f"プライベートスレッド {thread.name} を削除しました")
-                                                break
-                                except Exception as e:
-                                    logger.error(f"プライベートスレッドの削除中にエラーが発生しました: {e}")
+                                # 非公開ロールを削除
+                                member = await interaction.guild.fetch_member(post_user_id)
+                                private_role = interaction.guild.get_role(1278762436569415771)  # 非公開ロールID
+                                if private_role and member:
+                                    await member.remove_roles(private_role, reason="非公開投稿がなくなりました")
+                                    logger.info(f"ユーザー {member} から非公開ロールを削除しました")
                         except Exception as e:
-                            logger.error(f"非公開投稿処理中にエラーが発生しました: {e}")
+                            logger.error(f"非公開ロールの削除中にエラーが発生しました: {e}")
                     
                     await interaction.followup.send(
                         "✅ 投稿を削除しました。",
@@ -121,5 +118,5 @@ class Delete(commands.Cog, DatabaseMixin):
                 ephemeral=True
             )
 
-async def setup(bot: commands.Bot) -> None:
+async def setup(bot: commands.Bot):
     await bot.add_cog(Delete(bot))

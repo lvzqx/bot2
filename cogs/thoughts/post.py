@@ -166,8 +166,7 @@ class Post(commands.Cog):
                 if category:
                     footer_parts.append(f"カテゴリ: {category}")
                 footer_parts.append(f"投稿ID: {post_id}")
-                # すべての投稿にUIDを含める（復元用）
-                # UIDは表示しない（裏でのみ保存）
+                # UIDは表示しない（復元はmessage_referencesのuser_idで行う）
                 embed.set_footer(text=" | ".join(footer_parts))
                 
                 # メッセージを送信
@@ -201,6 +200,9 @@ class Post(commands.Cog):
                             ephemeral=True
                         )
                         return
+                    
+                    # 投稿者をスレッドに追加
+                    await thread.add_user(interaction.user)
                     
                     # スレッドにメッセージを送信
                     sent_message = await thread.send(embed=embed)
@@ -251,65 +253,6 @@ class Post(commands.Cog):
                 embed.add_field(name="表示名", value=f"`{'匿名' if is_anonymous else '名義'}`", inline=True)
                 
                 await interaction.followup.send(embed=embed, ephemeral=True)
-                
-                # 個人キーを生成してDMで送信（初回のみ）
-                try:
-                    # ユーザーの既存投稿を確認
-                    with post_cog._get_db_connection() as conn:
-                        with post_cog._get_cursor(conn) as cursor:
-                            cursor.execute('SELECT COUNT(*) as count FROM thoughts WHERE user_id = ?', (interaction.user.id,))
-                            result = cursor.fetchone()
-                            post_count = result['count'] if result else 0
-                    
-                    # 初回投稿時のみキーを送信
-                    if post_count == 1:
-                        import hashlib
-                        import time
-                        
-                        # メンバー参加日を取得
-                        try:
-                            member = interaction.guild.get_member(interaction.user.id)
-                            if member and member.joined_at:
-                                joined_at = int(member.joined_at.timestamp())
-                            else:
-                                joined_at = interaction.user.id  # フォールバック
-                        except:
-                            joined_at = interaction.user.id  # フォールバック
-                        
-                        # ユーザー名、参加日からハッシュを生成
-                        key_data = f"{interaction.user.name}_{joined_at}"
-                        user_key = hashlib.sha256(key_data.encode()).hexdigest()[:12]
-                        
-                        # DMチャンネルを取得または作成
-                        dm_channel = await interaction.user.create_dm()
-                        
-                        # キーをDMで送信
-                        key_embed = discord.Embed(
-                            title="🔑 個人キーが発行されました",
-                            description=f"あなたの個人キー: `{user_key}`\n\nこのキーを使うと、自分の投稿をすべて表示できます。\n**このキーは他人に教えないでください。**\n\n使用例: `/list key:{user_key}`",
-                            color=discord.Color.gold()
-                        )
-                        
-                        await dm_channel.send(embed=key_embed)
-                        
-                        # 公開チャンネルにはキー情報を表示しない
-                        await interaction.followup.send(
-                            "✅ 投稿が完了しました！DMに個人キーを送信しました。",
-                            ephemeral=True
-                        )
-                    else:
-                        # 2回目以降は通常完了メッセージのみ
-                        await interaction.followup.send(
-                            "✅ 投稿が完了しました！",
-                            ephemeral=True
-                        )
-                    
-                except Exception as e:
-                    logger.error(f"DM送信中にエラーが発生しました: {e}", exc_info=True)
-                    await interaction.followup.send(
-                        "✅ 投稿は完了しましたが、DMの送信に失敗しました。プライバシー設定を確認してください。",
-                        ephemeral=True
-                    )
                 
             except Exception as e:
                 logger.error(f"投稿中にエラーが発生しました: {e}", exc_info=True)
@@ -536,6 +479,7 @@ class Post(commands.Cog):
                     if category:
                         footer_parts.append(f"カテゴリ: {category}")
                     footer_parts.append(f"投稿ID: {post_id}")
+                    # UIDは表示しない（復元はmessage_referencesのuser_idで行う）
                     embed.set_footer(text=" | ".join(footer_parts))
                     
                     # メッセージを送信
@@ -598,6 +542,26 @@ class Post(commands.Cog):
                             return
                     
                     await thread.add_user(interaction.user)
+
+                    # 「非公開」ロールを取得または作成
+                    private_role = discord.utils.get(interaction.guild.roles, name="非公開")
+                    if not private_role:
+                        private_role = await interaction.guild.create_role(
+                            name="非公開",
+                            reason="非公開投稿用のロールを作成"
+                        )
+
+                    # 投稿者に「非公開」ロールを付与
+                    member = interaction.guild.get_member(interaction.user.id)
+                    if member and private_role not in member.roles:
+                        await member.add_roles(private_role, reason="非公開投稿のため")
+
+                    # 「非公開」ロール保持者をスレッドに追加
+                    for role_member in private_role.members:
+                        try:
+                            await thread.add_user(role_member)
+                        except discord.HTTPException:
+                            pass
                     
                     embed = discord.Embed(
                         description=message,
@@ -616,6 +580,7 @@ class Post(commands.Cog):
                     if category:
                         footer_parts.append(f"カテゴリ: {category}")
                     footer_parts.append(f"投稿ID: {post_id}")
+                    # UIDは表示しない（復元はmessage_referencesのuser_idで行う）
                     embed.set_footer(text=" | ".join(footer_parts))
                     
                     sent_message = await thread.send(embed=embed)
@@ -623,91 +588,28 @@ class Post(commands.Cog):
                     # DBにはスレッドIDを保存
                     channel = thread
                 
-                # メッセージ参照を保存
-                with post_cog._get_db_connection() as conn:
-                    with post_cog._get_cursor(conn) as cursor:
+                # メッセージ参照を保存（user_idも含める）
+                with self._get_db_connection() as conn:
+                    with self._get_cursor(conn) as cursor:
                         cursor.execute('''
-                            INSERT INTO message_references (
-                                channel_id, message_id, post_id
-                            ) VALUES (?, ?, ?)
-                        ''', (
-                            str(channel.id),
-                            str(sent_message.id),
-                            post_id
-                        ))
+                            INSERT OR REPLACE INTO message_references (post_id, message_id, channel_id, user_id)
+                            VALUES (?, ?, ?, ?)
+                        ''', (post_id, sent_message.id, channel.id, interaction.user.id))
                         conn.commit()
                 
-                # 完了メッセージを送信
-                embed = discord.Embed(
-                    title="✅ 投稿が完了しました！",
-                    description=f"[メッセージにジャンプ]({sent_message.jump_url})",
-                    color=discord.Color.green()
-                )
-                embed.add_field(name="ID", value=f"`{post_id}`", inline=True)
-                if category:
-                    embed.add_field(name="カテゴリ", value=f"`{category}`", inline=True)
-                embed.add_field(name="表示名", value=f"`{'匿名' if is_anonymous else '表示'}`", inline=True)
-                
-                await interaction.followup.send(embed=embed, ephemeral=True)
-                
-                # 個人キーを生成してDMで送信（初回のみ）
-                try:
-                    # ユーザーの既存投稿を確認
-                    with post_cog._get_db_connection() as conn:
-                        with post_cog._get_cursor(conn) as cursor:
-                            cursor.execute('SELECT COUNT(*) as count FROM thoughts WHERE user_id = ?', (interaction.user.id,))
-                            result = cursor.fetchone()
-                            post_count = result['count'] if result else 0
-                    
-                    # 初回投稿時のみキーを送信
-                    if post_count == 1:
-                        import hashlib
-                        import time
-                        
-                        # メンバー参加日を取得
-                        try:
-                            member = interaction.guild.get_member(interaction.user.id)
-                            if member and member.joined_at:
-                                joined_at = int(member.joined_at.timestamp())
-                            else:
-                                joined_at = interaction.user.id  # フォールバック
-                        except:
-                            joined_at = interaction.user.id  # フォールバック
-                        
-                        # ユーザー名、参加日からハッシュを生成
-                        key_data = f"{interaction.user.name}_{joined_at}"
-                        user_key = hashlib.sha256(key_data.encode()).hexdigest()[:12]
-                        
-                        # DMチャンネルを取得または作成
-                        dm_channel = await interaction.user.create_dm()
-                        
-                        # キーをDMで送信
-                        key_embed = discord.Embed(
-                            title="🔑 個人キーが発行されました",
-                            description=f"あなたの個人キー: `{user_key}`\n\nこのキーを使うと、自分の投稿をすべて表示できます。\n**このキーは他人に教えないでください。**\n\n使用例: `/list key:{user_key}`",
-                            color=discord.Color.gold()
-                        )
-                        
-                        await dm_channel.send(embed=key_embed)
-                        
-                        # 公開チャンネルにはキー情報を表示しない
-                        await interaction.followup.send(
-                            "DMに個人キーを送信しました。",
-                            ephemeral=True
-                        )
-                    else:
-                        # 2回目以降は通常完了メッセージのみ
-                        await interaction.followup.send(
-                            "✅ 投稿が完了しました！",
-                            ephemeral=True
-                        )
-                    
-                except Exception as e:
-                    logger.error(f"DM送信中にエラーが発生しました: {e}", exc_info=True)
-                    await interaction.followup.send(
-                        "✅ 投稿は完了しましたが、DMの送信に失敗しました。プライバシー設定を確認してください。",
-                        ephemeral=True
+                # 公開投稿の場合のみ完了メッセージを送信（非公開は既に送信済み）
+                if is_public:
+                    embed = discord.Embed(
+                        title="✅ 投稿が完了しました！",
+                        description=f"[メッセージにジャンプ]({sent_message.jump_url})",
+                        color=discord.Color.green()
                     )
+                    embed.add_field(name="ID", value=f"`{post_id}`", inline=True)
+                    if category:
+                        embed.add_field(name="カテゴリ", value=f"`{category}`", inline=True)
+                    embed.add_field(name="表示名", value=f"`{'匿名' if is_anonymous else '表示'}`", inline=True)
+                    
+                    await interaction.followup.send(embed=embed, ephemeral=True)
                 
             except Exception as e:
                 logger.error(f"投稿中にエラーが発生しました: {e}", exc_info=True)

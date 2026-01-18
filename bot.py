@@ -138,12 +138,14 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
         # 必要な拡張機能の順序を定義（依存関係がある場合に備えて）
         required_extensions = [
             'cogs.thoughts.post',
-            'cogs.thoughts.list',
-            'cogs.thoughts.edit',
             'cogs.thoughts.delete',
+            'cogs.thoughts.list',
             'cogs.thoughts.search',
+            'cogs.thoughts.edit',
+            'cogs.thoughts.restore_messages',  # メッセージ整理用
+            'cogs.thoughts.data_recovery',  # データ復元用
+            'cogs.thoughts.user_fix',  # 投稿者情報修正用
             'cogs.thoughts.help',
-            'cogs.thoughts.user_fix',
         ]
         
         # 拡張機能をロード
@@ -207,7 +209,9 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
             
             # 必要なコマンドがすべて登録されているか確認
             required_commands = {
-                'post', 'delete', 'list', 'search', 'edit', 'help'
+                'post', 'delete', 'list', 'search', 'edit', 'help', 'restore_messages',
+                'backup_database', 'list_backups', 'restore_backup', 'check_database', 'cleanup_orphaned',
+                'recover_from_messages'
             }
             registered_command_names = {cmd.name for cmd in registered_commands}
             missing_commands = required_commands - registered_command_names
