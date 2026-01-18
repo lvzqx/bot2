@@ -86,6 +86,16 @@ class Delete(commands.Cog, DatabaseMixin):
                         message = await channel.fetch_message(int(message_id))
                         await message.delete()
                         logger.info(f"メッセージ {message_id} を削除しました")
+                        
+                        # 非公開投稿の場合、スレッドも削除
+                        if is_private and channel.type == discord.ChannelType.private_thread:
+                            try:
+                                await channel.delete(reason="非公開投稿の削除に伴うスレッド削除")
+                                logger.info(f"プライベートスレッド {channel.id} を削除しました")
+                            except discord.Forbidden:
+                                logger.warning(f"スレッドの削除権限がありません: {channel.id}")
+                            except Exception as e:
+                                logger.error(f"スレッド削除中にエラー: {e}")
                     except discord.NotFound:
                         logger.warning(f"メッセージが見つかりません: {message_id}")
                     except discord.Forbidden:
