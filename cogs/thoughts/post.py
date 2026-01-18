@@ -5,7 +5,7 @@ import sqlite3
 from contextlib import contextmanager
 from typing import Optional, Tuple
 
-import discord
+import sqlite3
 from discord import app_commands, ui
 from discord.ext import commands
 
@@ -479,8 +479,7 @@ class Post(commands.Cog):
                     if category:
                         footer_parts.append(f"カテゴリ: {category}")
                     footer_parts.append(f"投稿ID: {post_id}")
-                    # UIDを含める（復元用）
-                    footer_parts.append(f"UID: {interaction.user.id}")
+                    # UIDは表示しない（DBのみで管理）
                     embed.set_footer(text=" | ".join(footer_parts))
                     
                     # メッセージを送信
@@ -581,8 +580,7 @@ class Post(commands.Cog):
                     if category:
                         footer_parts.append(f"カテゴリ: {category}")
                     footer_parts.append(f"投稿ID: {post_id}")
-                    # UIDを含める（復元用）
-                    footer_parts.append(f"UID: {interaction.user.id}")
+                    # UIDは表示しない（DBのみで管理）
                     embed.set_footer(text=" | ".join(footer_parts))
                     
                     sent_message = await thread.send(embed=embed)
@@ -594,6 +592,26 @@ class Post(commands.Cog):
                 post_cog = interaction.client.get_cog('Post')
                 with post_cog._get_db_connection() as conn:
                     with post_cog._get_cursor(conn) as cursor:
+                        # user_idカラムがなければ追加
+                        try:
+                            cursor.execute('ALTER TABLE message_references ADD COLUMN user_id INTEGER')
+                            conn.commit()
+                            logger.info("message_referencesテーブルにuser_idカラムを追加しました")
+                        except sqlite3.OperationalError as e:
+                            if "duplicate column name" in str(e).lower():
+                                logger.info("user_idカラムは既に存在します")
+                            else:
+                                logger.error(f"カラム追加に失敗しました: {e}")
+                                # カラムがない場合はthoughtsからuser_idを取得する方式に変更
+                                cursor.execute('''
+                                    INSERT OR REPLACE INTO message_references (post_id, message_id, channel_id)
+                                    VALUES (?, ?, ?)
+                                ''', (post_id, sent_message.id, channel.id))
+                                conn.commit()
+                                logger.info("user_idなしでmessage_referencesに保存しました")
+                                await interaction.followup.send(embed=embed, ephemeral=True)
+                                return
+                        
                         cursor.execute('''
                             INSERT OR REPLACE INTO message_references (post_id, message_id, channel_id, user_id)
                             VALUES (?, ?, ?, ?)

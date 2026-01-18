@@ -110,30 +110,23 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                                 except (IndexError, AttributeError):
                                     pass
                             
-                            # 投稿者IDを抽出
-                            original_user_id = None
-                            has_uid = "UID:" in footer_text
-                            if has_uid:
-                                try:
-                                    original_user_id = int(footer_text.split("UID:")[1].strip())
-                                except (ValueError, IndexError):
-                                    print(f"[DEBUG] 投稿ID {post_id}: UIDの解析に失敗しました")
-                                    pass
+                            # message_referencesからuser_idを取得
+                            cursor.execute('''
+                                SELECT user_id 
+                                FROM message_references 
+                                WHERE message_id = ?
+                            ''', (message_id,))
+                            user_ref = cursor.fetchone()
+                            original_user_id = user_ref[0] if user_ref else None
+                            
+                            if original_user_id is None:
+                                print(f"[DEBUG] 投稿ID {post_id}: message_referencesにuser_idが見つかりません")
+                                continue
                             else:
-                                print(f"[DEBUG] 投稿ID {post_id}: UIDが見つかりません")
+                                print(f"[DEBUG] 投稿ID {post_id}: user_id={original_user_id} を検出、復元します")
                             
                             # 匿名設定を判定
                             is_anonymous = embed.author.name == "匿名ユーザー"
-                            
-                            # UIDが抽出できなかった場合の処理
-                            if original_user_id is None:
-                                # UIDがない場合は復元しない（スキップ）
-                                print(f"[DEBUG] 投稿ID {post_id}: UIDがないため復元をスキップします")
-                                continue
-                            else:
-                                print(f"[DEBUG] 投稿ID {post_id}: UID={original_user_id} を検出、復元します")
-                            
-                            # 非公開設定を判定（チャンネルから判定）
                             is_private = not any(ch.id == channel.id for ch in channels if ch.name and "公開" in ch.name)
                             
                             # データベースに存在しないことを確認
