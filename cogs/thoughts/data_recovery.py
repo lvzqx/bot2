@@ -28,11 +28,16 @@ class DataRecovery(commands.Cog, DatabaseMixin):
             # 復元対象チャンネルを決定
             channels = []
             if channel_id:
-                target_channel = interaction.guild.get_channel(int(channel_id))
-                if not target_channel:
-                    await interaction.followup.send("❌ 指定されたチャンネルが見つかりません。", ephemeral=True)
+                try:
+                    target_channel = interaction.guild.get_channel(int(channel_id))
+                    if not target_channel:
+                        await interaction.followup.send(f"❌ 指定されたチャンネルが見つかりません: {channel_id}", ephemeral=True)
+                        return
+                    channels.append(target_channel)
+                    await interaction.followup.send(f"🔍 チャンネル `{target_channel.name}` から復元を開始します...", ephemeral=True)
+                except ValueError:
+                    await interaction.followup.send(f"❌ 無効なチャンネルIDです: {channel_id}", ephemeral=True)
                     return
-                channels.append(target_channel)
             else:
                 # 公開チャンネルと非公開チャンネルの両方を確認
                 from config import CHANNELS
@@ -79,16 +84,26 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                 for channel in target_channels:
                     await interaction.followup.send(f"📁 {channel.name} のメッセージをスキャン中...", ephemeral=True)
                     
+                    message_count = 0
+                    bot_message_count = 0
+                    embed_count = 0
+                    
                     # チャンネルのメッセージを取得
                     async for message in channel.history(limit=None):
+                        message_count += 1
+                        
                         # ボットのメッセージのみを処理
-                        if message.author.bot and message.embeds:
-                            embed = message.embeds[0]
+                        if message.author.bot:
+                            bot_message_count += 1
                             
-                            # 投稿内容を取得
-                            content = embed.description
-                            if not content:
-                                continue
+                            if message.embeds:
+                                embed_count += 1
+                                embed = message.embeds[0]
+                                
+                                # 投稿内容を取得
+                                content = embed.description
+                                if not content:
+                                    continue
                             
                             # フッターから投稿IDを抽出
                             footer_text = embed.footer.text if embed.footer else ""
@@ -142,10 +157,9 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                                 if not cursor.fetchone():
                                     # データベースに挿入
                                     cursor.execute('''
-                                        INSERT INTO thoughts (id, content, category, is_anonymous, is_private, user_id, created_at)
-                                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                                        INSERT INTO thoughts (content, category, is_anonymous, is_private, user_id, created_at)
+                                        VALUES (?, ?, ?, ?, ?, ?)
                                     ''', (
-                                        post_id,
                                         content,
                                         category,
                                         is_anonymous,
@@ -223,10 +237,9 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                                         if not cursor.fetchone():
                                             # データベースに挿入
                                             cursor.execute('''
-                                                INSERT INTO thoughts (id, content, category, is_anonymous, is_private, user_id, created_at)
-                                                VALUES (?, ?, ?, ?, ?, ?, ?)
+                                                INSERT INTO thoughts (content, category, is_anonymous, is_private, user_id, created_at)
+                                                VALUES (?, ?, ?, ?, ?, ?)
                                             ''', (
-                                                post_id,
                                                 content,
                                                 category,
                                                 int(is_anonymous),  # 明示的にintに変換
@@ -251,6 +264,15 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                                                 )
                 
                 conn.commit()
+            
+                await interaction.followup.send(
+                    f"📊 チャンネル `{channel.name}` のスキャン完了:\n"
+                    f"• 総メッセージ数: {message_count}\n"
+                    f"• ボットメッセージ数: {bot_message_count}\n"
+                    f"• Embedメッセージ数: {embed_count}\n"
+                    f"• 復元した投稿数: {recovered_count}", 
+                    ephemeral=True
+                )
             
             await interaction.followup.send(
                 f"✅ データベース復元が完了しました！\n"
