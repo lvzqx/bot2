@@ -97,19 +97,19 @@ class Delete(commands.Cog, DatabaseMixin):
                             remaining_posts = cursor.fetchone()['count']
                             
                             if remaining_posts == 0:
-                                # プライベートスレッドをアーカイブ（閉じる）
+                                # プライベートスレッドを削除
                                 try:
                                     private_channel = interaction.guild.get_channel(1278762436569415772)  # 非公開チャンネルID
                                     if private_channel:
                                         thread_prefix = f"非公開投稿 - {post_user_id}"
                                         for thread in private_channel.threads:
                                             if thread.name.startswith(thread_prefix):
-                                                # スレッドをアーカイブ（閉じる）
-                                                await thread.edit(archived=True, locked=True, reason="非公開投稿がなくなりました")
-                                                logger.info(f"プライベートスレッド {thread.name} をアーカイブしました")
+                                                # スレッドを完全に削除
+                                                await thread.delete(reason="非公開投稿がなくなりました")
+                                                logger.info(f"プライベートスレッド {thread.name} を削除しました")
                                                 break
                                 except Exception as e:
-                                    logger.error(f"プライベートスレッドのアーカイブ中にエラーが発生しました: {e}")
+                                    logger.error(f"プライベートスレッドの削除中にエラーが発生しました: {e}")
                         except Exception as e:
                             logger.error(f"非公開投稿処理中にエラーが発生しました: {e}")
                     
