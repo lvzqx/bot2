@@ -31,10 +31,25 @@ class Delete(commands.Cog, DatabaseMixin):
                     # message_referencesテーブルにuser_idカラムがなければ追加
                     cursor.execute('PRAGMA table_info(message_references)')
                     columns = [column[1] for column in cursor.fetchall()]
+                    logger.info(f"message_references columns: {columns}")
+                    
                     if 'user_id' not in columns:
-                        cursor.execute('ALTER TABLE message_references ADD COLUMN user_id INTEGER NOT NULL DEFAULT 0')
+                        cursor.execute('ALTER TABLE message_references ADD COLUMN user_id INTEGER')
                         conn.commit()
                         logger.info("message_referencesテーブルにuser_idカラムを追加しました")
+                        
+                        # 既存データにuser_idを補完
+                        cursor.execute('''
+                            UPDATE message_references 
+                            SET user_id = (
+                                SELECT t.user_id 
+                                FROM thoughts t 
+                                WHERE t.id = message_references.post_id
+                            )
+                            WHERE user_id IS NULL
+                        ''')
+                        conn.commit()
+                        logger.info("既存データにuser_idを補完しました")
                     
                     cursor.execute('''
                         SELECT mr.post_id, mr.channel_id, COALESCE(mr.user_id, t.user_id) as user_id, t.is_private
@@ -44,6 +59,8 @@ class Delete(commands.Cog, DatabaseMixin):
                     ''', (message_id,))
                     
                     row = cursor.fetchone()
+                    logger.info(f"クエリ結果: {row}")
+                    
                     if not row:
                         await interaction.followup.send(
                             "❌ 指定されたメッセージIDの投稿が見つかりません。",
