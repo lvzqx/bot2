@@ -79,9 +79,10 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                     )
                 ''')
                 
-                target_channels = [target_channel] if channel_id else target_channels
+                # チャンネルリストを設定
+                channel_list = [target_channel] if channel_id else target_channels
                 
-                for channel in target_channels:
+                for channel in channel_list:
                     await interaction.followup.send(f"📁 {channel.name} のメッセージをスキャン中...", ephemeral=True)
                     
                     message_count = 0
@@ -149,7 +150,7 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                             is_anonymous = embed.author.name == "匿名ユーザー"
                             
                             # 非公開設定を判定（チャンネルから判定）
-                            is_private = not any(ch.id == channel.id for ch in channels if ch.name and "公開" in ch.name)
+                            is_private = not any(ch.id == channel.id for ch in channel_list if ch.name and "公開" in ch.name)
                             
                             # データベースに存在しないことを確認
                             if post_id:
@@ -229,7 +230,7 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                                         is_anonymous = is_anonymous or is_anonymous_by_icon
                                     
                                     # 非公開設定を判定（親チャンネルから判定）
-                                    is_private = not any(ch.id == channel.id for ch in channels if ch.name and "公開" in ch.name)
+                                    is_private = not any(ch.id == channel.id for ch in channel_list if ch.name and "公開" in ch.name)
                                     
                                     # データベースに存在しないことを確認
                                     if post_id:
