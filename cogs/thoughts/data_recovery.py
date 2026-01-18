@@ -26,14 +26,14 @@ class DataRecovery(commands.Cog, DatabaseMixin):
             await interaction.response.defer(ephemeral=True)
             
             # 復元対象チャンネルを決定
-            channels = []
+            target_channels = []
             if channel_id:
                 try:
                     target_channel = interaction.guild.get_channel(int(channel_id))
                     if not target_channel:
                         await interaction.followup.send(f"❌ 指定されたチャンネルが見つかりません: {channel_id}", ephemeral=True)
                         return
-                    channels.append(target_channel)
+                    target_channels.append(target_channel)
                     await interaction.followup.send(f"🔍 チャンネル `{target_channel.name}` から復元を開始します...", ephemeral=True)
                 except ValueError:
                     await interaction.followup.send(f"❌ 無効なチャンネルIDです: {channel_id}", ephemeral=True)
@@ -44,9 +44,9 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                 for channel_type, cid in CHANNELS.items():
                     ch = interaction.guild.get_channel(cid)
                     if ch:
-                        channels.append(ch)
+                        target_channels.append(ch)
                 
-                if not channels:
+                if not target_channels:
                     await interaction.followup.send("❌ チャンネルが見つかりません。", ephemeral=True)
                     return
             
@@ -79,7 +79,7 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                     )
                 ''')
                 
-                target_channels = [target_channel] if channel_id else channels
+                target_channels = [target_channel] if channel_id else target_channels
                 
                 for channel in target_channels:
                     await interaction.followup.send(f"📁 {channel.name} のメッセージをスキャン中...", ephemeral=True)
