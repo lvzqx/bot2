@@ -166,10 +166,8 @@ class Post(commands.Cog):
                 if category:
                     footer_parts.append(f"カテゴリ: {category}")
                 footer_parts.append(f"投稿ID: {post_id}")
-                # UIDをハッシュ化して追加（復元用）
-                import hashlib
-                uid_hash = hashlib.sha256(str(interaction.user.id).encode()).hexdigest()[:8]
-                footer_parts.append(f"UID: {uid_hash}")
+                # すべての投稿にUIDを含める（復元用）
+                # UIDは表示しない（裏でのみ保存）
                 embed.set_footer(text=" | ".join(footer_parts))
                 
                 # メッセージを送信
@@ -256,6 +254,50 @@ class Post(commands.Cog):
                 embed.add_field(name="表示名", value=f"`{'匿名' if is_anonymous else '名義'}`", inline=True)
                 
                 await interaction.followup.send(embed=embed, ephemeral=True)
+                
+                # 個人キーを生成してDMで送信
+                try:
+                    import hashlib
+                    import time
+                    
+                    # メンバー参加日を取得
+                    try:
+                        member = interaction.guild.get_member(interaction.user.id)
+                        if member and member.joined_at:
+                            joined_at = int(member.joined_at.timestamp())
+                        else:
+                            joined_at = interaction.user.id  # フォールバック
+                    except:
+                        joined_at = interaction.user.id  # フォールバック
+                    
+                    # ユーザー名、参加日からハッシュを生成
+                    key_data = f"{interaction.user.name}_{joined_at}"
+                    user_key = hashlib.sha256(key_data.encode()).hexdigest()[:12]
+                    
+                    # DMチャンネルを取得または作成
+                    dm_channel = await interaction.user.create_dm()
+                    
+                    # キーをDMで送信
+                    key_embed = discord.Embed(
+                        title="🔑 個人キーが発行されました",
+                        description=f"あなたの個人キー: `{user_key}`\n\nこのキーを使うと、自分の投稿をすべて表示できます。\n**このキーは他人に教えないでください。**\n\n使用例: `/list key:{user_key}`",
+                        color=discord.Color.gold()
+                    )
+                    
+                    await dm_channel.send(embed=key_embed)
+                    
+                    # 公開チャンネルにはキー情報を表示しない
+                    await interaction.followup.send(
+                        "✅ 投稿が完了しました！DMに個人キーを送信しました。",
+                        ephemeral=True
+                    )
+                    
+                except Exception as e:
+                    logger.error(f"DM送信中にエラーが発生しました: {e}", exc_info=True)
+                    await interaction.followup.send(
+                        "✅ 投稿は完了しましたが、DMの送信に失敗しました。プライバシー設定を確認してください。",
+                        ephemeral=True
+                    )
                 
             except Exception as e:
                 logger.error(f"投稿中にエラーが発生しました: {e}", exc_info=True)
@@ -620,6 +662,15 @@ class Post(commands.Cog):
                     embed.add_field(name="表示名", value=f"`{'匿名' if is_anonymous else '表示'}`", inline=True)
                     
                     await interaction.followup.send(embed=embed, ephemeral=True)
+                    
+                    # 個人キーを生成して表示
+                    user_key = f"{interaction.user.id}_{interaction.user.name[:4]}"
+                    key_embed = discord.Embed(
+                        title="🔑 個人キー",
+                        description=f"あなたの個人キー: `{user_key}`\nこのキーを使うと自分の投稿をすべて表示できます。",
+                        color=discord.Color.gold()
+                    )
+                    await interaction.followup.send(embed=key_embed, ephemeral=True)
                 
             except Exception as e:
                 logger.error(f"投稿中にエラーが発生しました: {e}", exc_info=True)

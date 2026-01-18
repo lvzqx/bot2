@@ -138,14 +138,12 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
         # 必要な拡張機能の順序を定義（依存関係がある場合に備えて）
         required_extensions = [
             'cogs.thoughts.post',
-            'cogs.thoughts.delete',
             'cogs.thoughts.list',
-            'cogs.thoughts.search',
             'cogs.thoughts.edit',
-            'cogs.thoughts.restore_messages',  # メッセージ整理用
-            'cogs.thoughts.data_recovery',  # データ復元用
-            'cogs.thoughts.user_fix',  # 投稿者情報修正用
+            'cogs.thoughts.delete',
+            'cogs.thoughts.search',
             'cogs.thoughts.help',
+            'cogs.thoughts.user_fix',
         ]
         
         # 拡張機能をロード

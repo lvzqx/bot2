@@ -476,17 +476,12 @@ class Edit(commands.Cog, DatabaseMixin):
                         
                         # フッターにカテゴリーと投稿IDを表示
                         # フッター設定（カテゴリーがない場合はIDのみ）
-                        # UIDをハッシュ化して追加（復元用）
-                        import hashlib
-                        cursor.execute('SELECT user_id FROM thoughts WHERE id = ?', (self.post_id,))
-                        user_id_row = cursor.fetchone()
-                        user_id = user_id_row[0] if user_id_row else interaction.user.id
-                        uid_hash = hashlib.sha256(str(user_id).encode()).hexdigest()[:8]
+                        # UIDは表示しない（裏でのみ保存）
                         
                         if category:
-                            embed.set_footer(text=f'カテゴリー: {category} | 投稿ID: {self.post_id} | UID: {uid_hash}')
+                            embed.set_footer(text=f'カテゴリー: {category} | 投稿ID: {self.post_id}')
                         else:
-                            embed.set_footer(text=f'投稿ID: {self.post_id} | UID: {uid_hash}')
+                            embed.set_footer(text=f'投稿ID: {self.post_id}')
                         
                         # 画像があれば追加
                         if image_url:
