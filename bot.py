@@ -207,9 +207,7 @@ class ThoughtBot(commands.Bot, DatabaseMixin):
             
             # 必要なコマンドがすべて登録されているか確認
             required_commands = {
-                'post', 'delete', 'list', 'search', 'edit', 'help', 'restore_messages',
-                'backup_database', 'list_backups', 'restore_backup', 'check_database', 'cleanup_orphaned',
-                'recover_from_messages'
+                'post', 'delete', 'list', 'search', 'edit', 'help'
             }
             registered_command_names = {cmd.name for cmd in registered_commands}
             missing_commands = required_commands - registered_command_names
