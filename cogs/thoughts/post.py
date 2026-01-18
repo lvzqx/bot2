@@ -167,7 +167,7 @@ class Post(commands.Cog):
                     footer_parts.append(f"カテゴリ: {category}")
                 footer_parts.append(f"投稿ID: {post_id}")
                 # すべての投稿にUIDを含める（復元用）
-                footer_parts.append(f"UID: {interaction.user.id}")
+                # UIDは表示しない（裏でのみ保存）
                 embed.set_footer(text=" | ".join(footer_parts))
                 
                 # メッセージを送信

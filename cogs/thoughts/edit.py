@@ -476,15 +476,12 @@ class Edit(commands.Cog, DatabaseMixin):
                         
                         # フッターにカテゴリーと投稿IDを表示
                         # フッター設定（カテゴリーがない場合はIDのみ）
-                        # UIDを取得してfooterに含める
-                        cursor.execute('SELECT user_id FROM thoughts WHERE id = ?', (self.post_id,))
-                        user_id_row = cursor.fetchone()
-                        user_id = user_id_row[0] if user_id_row else interaction.user.id
+                        # UIDは表示しない（裏でのみ保存）
                         
                         if category:
-                            embed.set_footer(text=f'カテゴリー: {category} | 投稿ID: {self.post_id} | UID: {user_id}')
+                            embed.set_footer(text=f'カテゴリー: {category} | 投稿ID: {self.post_id}')
                         else:
-                            embed.set_footer(text=f'投稿ID: {self.post_id} | UID: {user_id}')
+                            embed.set_footer(text=f'投稿ID: {self.post_id}')
                         
                         # 画像があれば追加
                         if image_url:
