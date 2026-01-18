@@ -5,7 +5,7 @@ import sqlite3
 from contextlib import contextmanager
 from typing import Optional, Tuple
 
-import sqlite3
+import discord
 from discord import app_commands, ui
 from discord.ext import commands
 
