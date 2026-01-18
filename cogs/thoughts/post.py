@@ -166,7 +166,10 @@ class Post(commands.Cog):
                 if category:
                     footer_parts.append(f"カテゴリ: {category}")
                 footer_parts.append(f"投稿ID: {post_id}")
-                # UIDは表示しない（裏でのみ保存）
+                # UIDをハッシュ化して追加（復元用）
+                import hashlib
+                uid_hash = hashlib.sha256(str(interaction.user.id).encode()).hexdigest()[:8]
+                footer_parts.append(f"UID: {uid_hash}")
                 embed.set_footer(text=" | ".join(footer_parts))
                 
                 # メッセージを送信

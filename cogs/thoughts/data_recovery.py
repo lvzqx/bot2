@@ -110,10 +110,19 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                             footer_text = embed.footer.text if embed.footer else ""
                             post_id = None
                             
-                            if "ID:" in footer_text:
+                            if "投稿ID:" in footer_text:
                                 try:
-                                    post_id = int(footer_text.split("ID:")[1].strip())
+                                    post_id = int(footer_text.split("投稿ID:")[1].strip().split("|")[0].strip())
+                                    print(f"[DEBUG] Footerから投稿IDを抽出: {post_id}")
                                 except (ValueError, IndexError):
+                                    print(f"[DEBUG] 投稿IDの解析に失敗: {footer_text}")
+                                    pass
+                            elif "ID:" in footer_text:
+                                try:
+                                    post_id = int(footer_text.split("ID:")[1].strip().split("|")[0].strip())
+                                    print(f"[DEBUG] Footerから投稿IDを抽出（古い形式）: {post_id}")
+                                except (ValueError, IndexError):
+                                    print(f"[DEBUG] 投稿IDの解析に失敗（古い形式）: {footer_text}")
                                     pass
                             
                             # カテゴリーを抽出
@@ -126,30 +135,81 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                                 except (IndexError, AttributeError):
                                     pass
                             
-                            # 投稿者IDを取得（複数方法で試行）
+                            # 投稿者IDを取得（ハッシュ化UIDから復元）
                             original_user_id = None
                             
-                            # 方法1: Embed footerからUIDを抽出
+                            # 方法1: ハッシュ化UIDから復元
+                            import hashlib
                             has_uid = "UID:" in footer_text
                             if has_uid:
                                 try:
-                                    original_user_id = int(footer_text.split("UID:")[1].strip())
-                                    print(f"[DEBUG] 投稿ID {post_id}: FooterからUID={original_user_id} を検出")
+                                    uid_hash = footer_text.split("UID:")[1].strip().split("|")[0].strip()
+                                    print(f"[DEBUG] 投稿ID {post_id}: ハッシュ化UIDを検出: {uid_hash}")
+                                    
+                                    # サーバー内の全ユーザーのUIDをハッシュ化して比較
+                                    for member in interaction.guild.members:
+                                        member_hash = hashlib.sha256(str(member.id).encode()).hexdigest()[:8]
+                                        if member_hash == uid_hash:
+                                            original_user_id = member.id
+                                            print(f"[DEBUG] 投稿ID {post_id}: ハッシュからユーザーを特定: {member.name} (ID: {original_user_id})")
+                                            break
+                                    
+                                    if original_user_id is None:
+                                        print(f"[DEBUG] 投稿ID {post_id}: ハッシュに一致するユーザーがいません")
+                                        
                                 except (ValueError, IndexError):
-                                    print(f"[DEBUG] 投稿ID {post_id}: UIDの解析に失敗しました")
+                                    print(f"[DEBUG] 投稿ID {post_id}: ハッシュ化UIDの解析に失敗しました")
                                     pass
                             
-                            # 方法2: メッセージのembed内容から投稿者を推定
+                            # 方法2: メッセージIDからmessage_referencesを検索（サーバー内部マッピング）
                             if original_user_id is None:
-                                # 匿名投稿かどうかで判定
+                                try:
+                                    cursor.execute('''
+                                        SELECT t.user_id 
+                                        FROM thoughts t
+                                        JOIN message_references mr ON t.id = mr.post_id
+                                        WHERE mr.message_id = ?
+                                    ''', (str(message.id),))
+                                    ref_result = cursor.fetchone()
+                                    if ref_result and ref_result[0]:
+                                        original_user_id = ref_result[0]
+                                        print(f"[DEBUG] 投稿ID {post_id}: MessageReferencesからuser_id={original_user_id} を検出")
+                                except Exception as e:
+                                    print(f"[DEBUG] 投稿ID {post_id}: MessageReferences検索エラー: {e}")
+                            
+                            # 方法3: Embed authorからユーザー名で特定
+                            if original_user_id is None:
                                 if embed.author and embed.author.name == "匿名ユーザー":
-                                    # 匿名投稿の場合は復元実行者のIDを使用（匿名でも誰かのIDが必要）
+                                    # 匿名投稿の場合は復元実行者のIDを使用
                                     original_user_id = interaction.user.id
                                     print(f"[DEBUG] 投稿ID {post_id}: 匿名投稿として復元実行者のID={original_user_id} を使用")
+                                elif embed.author and embed.author.name:
+                                    # 非匿名投稿の場合、表示名からユーザーを検索
+                                    display_name = embed.author.name
+                                    print(f"[DEBUG] 投稿ID {post_id}: 表示名 '{display_name}' からユーザーを検索中...")
+                                    
+                                    # サーバー内で表示名が一致するユーザーを検索
+                                    matching_members = []
+                                    for member in interaction.guild.members:
+                                        if member.display_name == display_name or member.name == display_name:
+                                            matching_members.append(member)
+                                    
+                                    if len(matching_members) == 1:
+                                        # 完全に一致するユーザーが1人だけの場合
+                                        original_user_id = matching_members[0].id
+                                        print(f"[DEBUG] 投稿ID {post_id}: 表示名からユーザーを特定: {matching_members[0].name} (ID: {original_user_id})")
+                                    elif len(matching_members) > 1:
+                                        # 複数一致する場合は不明としてマーク
+                                        print(f"[DEBUG] 投稿ID {post_id}: 表示名 '{display_name}' に複数のユーザーが一致するため不明としてマーク")
+                                        original_user_id = 0
+                                    else:
+                                        # 一致するユーザーがいない場合
+                                        print(f"[DEBUG] 投稿ID {post_id}: 表示名 '{display_name}' に一致するユーザーがいないため不明としてマーク")
+                                        original_user_id = 0
                                 else:
-                                    # 非匿名投稿の場合、投稿者を特定できないので不明としてマーク
-                                    print(f"[DEBUG] 投稿ID {post_id}: 非匿名投稿で投稿者を特定できないため不明としてマーク")
-                                    original_user_id = 0  # 不明な投稿者としてマーク
+                                    # author情報がない場合
+                                    print(f"[DEBUG] 投稿ID {post_id}: author情報がないため不明としてマーク")
+                                    original_user_id = 0
                             
                             # 匿名設定を判定
                             is_anonymous = embed.author.name == "匿名ユーザー"
