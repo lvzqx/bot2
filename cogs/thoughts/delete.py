@@ -103,6 +103,19 @@ class Delete(commands.Cog, DatabaseMixin):
                                 if private_role and member:
                                     await member.remove_roles(private_role, reason="非公開投稿がなくなりました")
                                     logger.info(f"ユーザー {member} から非公開ロールを削除しました")
+                                
+                                # プライベートスレッドを削除
+                                try:
+                                    private_channel = interaction.guild.get_channel(1278762436569415772)  # 非公開チャンネルID
+                                    if private_channel:
+                                        thread_prefix = f"非公開投稿 - {post_user_id}"
+                                        for thread in private_channel.threads:
+                                            if thread.name.startswith(thread_prefix):
+                                                await thread.delete(reason="非公開投稿がなくなりました")
+                                                logger.info(f"プライベートスレッド {thread.name} を削除しました")
+                                                break
+                                except Exception as e:
+                                    logger.error(f"プライベートスレッドの削除中にエラーが発生しました: {e}")
                         except Exception as e:
                             logger.error(f"非公開ロールの削除中にエラーが発生しました: {e}")
                     

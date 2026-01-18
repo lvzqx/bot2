@@ -255,42 +255,57 @@ class Post(commands.Cog):
                 
                 await interaction.followup.send(embed=embed, ephemeral=True)
                 
-                # 個人キーを生成してDMで送信
+                # 個人キーを生成してDMで送信（初回のみ）
                 try:
-                    import hashlib
-                    import time
+                    # ユーザーの既存投稿を確認
+                    with post_cog._get_db_connection() as conn:
+                        with post_cog._get_cursor(conn) as cursor:
+                            cursor.execute('SELECT COUNT(*) as count FROM thoughts WHERE user_id = ?', (interaction.user.id,))
+                            result = cursor.fetchone()
+                            post_count = result['count'] if result else 0
                     
-                    # メンバー参加日を取得
-                    try:
-                        member = interaction.guild.get_member(interaction.user.id)
-                        if member and member.joined_at:
-                            joined_at = int(member.joined_at.timestamp())
-                        else:
+                    # 初回投稿時のみキーを送信
+                    if post_count == 1:
+                        import hashlib
+                        import time
+                        
+                        # メンバー参加日を取得
+                        try:
+                            member = interaction.guild.get_member(interaction.user.id)
+                            if member and member.joined_at:
+                                joined_at = int(member.joined_at.timestamp())
+                            else:
+                                joined_at = interaction.user.id  # フォールバック
+                        except:
                             joined_at = interaction.user.id  # フォールバック
-                    except:
-                        joined_at = interaction.user.id  # フォールバック
-                    
-                    # ユーザー名、参加日からハッシュを生成
-                    key_data = f"{interaction.user.name}_{joined_at}"
-                    user_key = hashlib.sha256(key_data.encode()).hexdigest()[:12]
-                    
-                    # DMチャンネルを取得または作成
-                    dm_channel = await interaction.user.create_dm()
-                    
-                    # キーをDMで送信
-                    key_embed = discord.Embed(
-                        title="🔑 個人キーが発行されました",
-                        description=f"あなたの個人キー: `{user_key}`\n\nこのキーを使うと、自分の投稿をすべて表示できます。\n**このキーは他人に教えないでください。**\n\n使用例: `/list key:{user_key}`",
-                        color=discord.Color.gold()
-                    )
-                    
-                    await dm_channel.send(embed=key_embed)
-                    
-                    # 公開チャンネルにはキー情報を表示しない
-                    await interaction.followup.send(
-                        "✅ 投稿が完了しました！DMに個人キーを送信しました。",
-                        ephemeral=True
-                    )
+                        
+                        # ユーザー名、参加日からハッシュを生成
+                        key_data = f"{interaction.user.name}_{joined_at}"
+                        user_key = hashlib.sha256(key_data.encode()).hexdigest()[:12]
+                        
+                        # DMチャンネルを取得または作成
+                        dm_channel = await interaction.user.create_dm()
+                        
+                        # キーをDMで送信
+                        key_embed = discord.Embed(
+                            title="🔑 個人キーが発行されました",
+                            description=f"あなたの個人キー: `{user_key}`\n\nこのキーを使うと、自分の投稿をすべて表示できます。\n**このキーは他人に教えないでください。**\n\n使用例: `/list key:{user_key}`",
+                            color=discord.Color.gold()
+                        )
+                        
+                        await dm_channel.send(embed=key_embed)
+                        
+                        # 公開チャンネルにはキー情報を表示しない
+                        await interaction.followup.send(
+                            "✅ 投稿が完了しました！DMに個人キーを送信しました。",
+                            ephemeral=True
+                        )
+                    else:
+                        # 2回目以降は通常完了メッセージのみ
+                        await interaction.followup.send(
+                            "✅ 投稿が完了しました！",
+                            ephemeral=True
+                        )
                     
                 except Exception as e:
                     logger.error(f"DM送信中にエラーが発生しました: {e}", exc_info=True)
@@ -658,15 +673,6 @@ class Post(commands.Cog):
                     embed.add_field(name="表示名", value=f"`{'匿名' if is_anonymous else '表示'}`", inline=True)
                     
                     await interaction.followup.send(embed=embed, ephemeral=True)
-                    
-                    # 個人キーを生成して表示
-                    user_key = f"{interaction.user.id}_{interaction.user.name[:4]}"
-                    key_embed = discord.Embed(
-                        title="🔑 個人キー",
-                        description=f"あなたの個人キー: `{user_key}`\nこのキーを使うと自分の投稿をすべて表示できます。",
-                        color=discord.Color.gold()
-                    )
-                    await interaction.followup.send(embed=key_embed, ephemeral=True)
                 
             except Exception as e:
                 logger.error(f"投稿中にエラーが発生しました: {e}", exc_info=True)
