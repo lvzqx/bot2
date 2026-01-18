@@ -271,7 +271,7 @@ class Post(commands.Cog):
             
             # モーダルのインスタンスを作成
             try:
-                modal = self.PostModal(self.bot)
+                modal = self.PostModal()
                 logger.info("モーダルのインスタンス化に成功しました")
             except Exception as e:
                 logger.error(f"モーダルのインスタンス化に失敗しました: {e}", exc_info=True)
