@@ -92,7 +92,7 @@ class Delete(commands.Cog, DatabaseMixin):
                             cursor.execute('''
                                 SELECT COUNT(*) as count 
                                 FROM thoughts 
-                                WHERE user_id = ? AND is_private = 1
+                                WHERE user_id = ? AND is_public = 0
                             ''', (post_user_id,))
                             remaining_posts = cursor.fetchone()['count']
                             
