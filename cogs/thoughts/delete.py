@@ -86,6 +86,7 @@ class Delete(commands.Cog, DatabaseMixin):
                         return
                     
                     # 非公開投稿の場合、ロールを確認
+                    logger.info(f"デバッグ: 投稿情報 - is_private={is_private}, post_user_id={post_user_id}")
                     if is_private:
                         try:
                             # 残りの非公開投稿数を確認
@@ -102,18 +103,35 @@ class Delete(commands.Cog, DatabaseMixin):
                                 # プライベートスレッドを削除
                                 try:
                                     private_channel = interaction.guild.get_channel(1278762436569415772)  # 非公開チャンネルID
+                                    logger.info(f"デバッグ: private_channel={private_channel}")
                                     if private_channel:
                                         thread_prefix = f"非公開投稿 - {post_user_id} ("
                                         logger.info(f"デバッグ: thread_prefix={thread_prefix}")
                                         logger.info(f"デバッグ: 総スレッド数={len(private_channel.threads)}")
                                         
+                                        # botの権限を確認
+                                        bot_member = interaction.guild.me
+                                        logger.info(f"デバッグ: bot権限={bot_member.guild_permissions}")
+                                        
+                                        # すべてのスレッド名をログ出力
                                         for i, thread in enumerate(private_channel.threads):
-                                            logger.info(f"デバッグ: スレッド{i+1}: {thread.name}")
+                                            logger.info(f"デバッグ: スレッド{i+1}: '{thread.name}' (prefix: '{thread_prefix[:20]}...', starts_with: {thread.name.startswith(thread_prefix)})")
                                             if thread.name.startswith(thread_prefix):
-                                                # スレッドを完全に削除
-                                                await thread.delete(reason="非公開投稿がなくなりました")
-                                                logger.info(f"プライベートスレッド {thread.name} を削除しました")
-                                                break
+                                                try:
+                                                    # スレッドを完全に削除
+                                                    await thread.delete(reason="非公開投稿がなくなりました")
+                                                    logger.info(f"プライベートスレッド {thread.name} を削除しました")
+                                                    break
+                                                except discord.Forbidden as e:
+                                                    logger.error(f"デバッグ: スレッド削除権限なし - {e}")
+                                                    await interaction.followup.send(
+                                                        "❌ スレッドを削除する権限がありません。管理者に連絡してください。",
+                                                        ephemeral=True
+                                                    )
+                                                    break
+                                                except discord.HTTPException as e:
+                                                    logger.error(f"デバッグ: スレッド削除HTTPエラー - {e}")
+                                                    break
                                         else:
                                             logger.warning(f"デバッグ: 一致するスレッドが見つかりませんでした")
                                     else:
@@ -121,9 +139,11 @@ class Delete(commands.Cog, DatabaseMixin):
                                 except Exception as e:
                                     logger.error(f"プライベートスレッドの削除中にエラーが発生しました: {e}")
                             else:
-                                logger.info(f"デバッグ: 残り投稿数が0ではないためスレッド削除をスキップ")
+                                logger.info(f"デバッグ: 残り投稿数が0ではないためスレッド削除をスキップ (remaining_posts={remaining_posts})")
                         except Exception as e:
                             logger.error(f"非公開投稿処理中にエラーが発生しました: {e}")
+                    else:
+                        logger.info(f"デバッグ: 非公開投稿ではないためスレッド削除をスキップ (is_private={is_private})")
                     
                     await interaction.followup.send(
                         "✅ 投稿を削除しました。",
