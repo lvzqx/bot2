@@ -271,7 +271,7 @@ class Post(commands.Cog):
             
             # モーダルのインスタンスを作成
             try:
-                modal = self.PostModal()
+                modal = self.PostModal(self.bot)
                 logger.info("モーダルのインスタンス化に成功しました")
             except Exception as e:
                 logger.error(f"モーダルのインスタンス化に失敗しました: {e}", exc_info=True)
@@ -591,8 +591,9 @@ class Post(commands.Cog):
                     channel = thread
                 
                 # メッセージ参照を保存（user_idも含める）
-                with self._get_db_connection() as conn:
-                    with self._get_cursor(conn) as cursor:
+                post_cog = interaction.client.get_cog('Post')
+                with post_cog._get_db_connection() as conn:
+                    with post_cog._get_cursor(conn) as cursor:
                         cursor.execute('''
                             INSERT OR REPLACE INTO message_references (post_id, message_id, channel_id, user_id)
                             VALUES (?, ?, ?, ?)
