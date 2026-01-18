@@ -202,9 +202,6 @@ class Post(commands.Cog):
                         )
                         return
                     
-                    # 投稿者をスレッドに追加
-                    await thread.add_user(interaction.user)
-                    
                     # スレッドにメッセージを送信
                     sent_message = await thread.send(embed=embed)
                     
@@ -601,26 +598,6 @@ class Post(commands.Cog):
                             return
                     
                     await thread.add_user(interaction.user)
-
-                    # 「非公開」ロールを取得または作成
-                    private_role = discord.utils.get(interaction.guild.roles, name="非公開")
-                    if not private_role:
-                        private_role = await interaction.guild.create_role(
-                            name="非公開",
-                            reason="非公開投稿用のロールを作成"
-                        )
-
-                    # 投稿者に「非公開」ロールを付与
-                    member = interaction.guild.get_member(interaction.user.id)
-                    if member and private_role not in member.roles:
-                        await member.add_roles(private_role, reason="非公開投稿のため")
-
-                    # 「非公開」ロール保持者をスレッドに追加
-                    for role_member in private_role.members:
-                        try:
-                            await thread.add_user(role_member)
-                        except discord.HTTPException:
-                            pass
                     
                     embed = discord.Embed(
                         description=message,
