@@ -57,14 +57,10 @@ class Delete(commands.Cog, DatabaseMixin):
                     
                     # メッセージを削除
                     try:
-                        channel = await interaction.guild.fetch_channel(int(channel_id))
-                        message = await channel.fetch_message(int(message_id))
-                        await message.delete()
-                        logger.info(f"メッセージ {message_id} を削除しました")
-                    except discord.NotFound:
-                        logger.warning(f"メッセージが見つかりません: {message_id}")
-                    except discord.Forbidden:
-                        logger.warning(f"メッセージの削除権限がありません: {message_id}")
+                        channel = interaction.guild.get_channel(int(channel_id))
+                        if channel:
+                            message = await channel.fetch_message(int(message_id))
+                            await message.delete()
                     except Exception as e:
                         logger.error(f"メッセージ削除中にエラー: {e}")
                     
@@ -125,5 +121,5 @@ class Delete(commands.Cog, DatabaseMixin):
                 ephemeral=True
             )
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Delete(bot))
