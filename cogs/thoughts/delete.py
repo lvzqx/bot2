@@ -29,7 +29,7 @@ class Delete(commands.Cog, DatabaseMixin):
             with self._get_db_connection() as conn:
                 with self._get_cursor(conn) as cursor:
                     cursor.execute('''
-                        SELECT mr.post_id, mr.channel_id, t.user_id, t.is_private
+                        SELECT mr.post_id, mr.channel_id, t.user_id, t.is_public
                         FROM message_references mr
                         JOIN thoughts t ON mr.post_id = t.id
                         WHERE mr.message_id = ?
@@ -43,7 +43,8 @@ class Delete(commands.Cog, DatabaseMixin):
                         )
                         return
                     
-                    post_id, channel_id, post_user_id, is_private = row
+                    post_id, channel_id, post_user_id, is_public = row
+                    is_private = not is_public  # is_publicからis_privateを判定
                     logger.info(f"投稿を検出: post_id={post_id}, channel_id={channel_id}")
                     
                     # 権限チェック
@@ -96,20 +97,32 @@ class Delete(commands.Cog, DatabaseMixin):
                             ''', (post_user_id,))
                             remaining_posts = cursor.fetchone()['count']
                             
+                            logger.info(f"デバッグ: post_user_id={post_user_id}, remaining_posts={remaining_posts}, is_private={is_private}")
+                            
                             if remaining_posts == 0:
                                 # プライベートスレッドを削除
                                 try:
                                     private_channel = interaction.guild.get_channel(1278762436569415772)  # 非公開チャンネルID
                                     if private_channel:
                                         thread_prefix = f"非公開投稿 - {post_user_id} ("
-                                        for thread in private_channel.threads:
+                                        logger.info(f"デバッグ: thread_prefix={thread_prefix}")
+                                        logger.info(f"デバッグ: 総スレッド数={len(private_channel.threads)}")
+                                        
+                                        for i, thread in enumerate(private_channel.threads):
+                                            logger.info(f"デバッグ: スレッド{i+1}: {thread.name}")
                                             if thread.name.startswith(thread_prefix):
                                                 # スレッドを完全に削除
                                                 await thread.delete(reason="非公開投稿がなくなりました")
                                                 logger.info(f"プライベートスレッド {thread.name} を削除しました")
                                                 break
+                                        else:
+                                            logger.warning(f"デバッグ: 一致するスレッドが見つかりませんでした")
+                                    else:
+                                        logger.error("デバッグ: 非公開チャンネルが見つかりません")
                                 except Exception as e:
                                     logger.error(f"プライベートスレッドの削除中にエラーが発生しました: {e}")
+                            else:
+                                logger.info(f"デバッグ: 残り投稿数が0ではないためスレッド削除をスキップ")
                         except Exception as e:
                             logger.error(f"非公開投稿処理中にエラーが発生しました: {e}")
                     
