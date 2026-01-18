@@ -29,7 +29,7 @@ class Delete(commands.Cog, DatabaseMixin):
             with self._get_db_connection() as conn:
                 with self._get_cursor(conn) as cursor:
                     cursor.execute('''
-                        SELECT mr.post_id, mr.channel_id, t.user_id, t.is_public
+                        SELECT mr.post_id, mr.channel_id, t.user_id, t.is_private
                         FROM message_references mr
                         JOIN thoughts t ON mr.post_id = t.id
                         WHERE mr.message_id = ?
@@ -43,8 +43,7 @@ class Delete(commands.Cog, DatabaseMixin):
                         )
                         return
                     
-                    post_id, channel_id, post_user_id, is_public = row
-                    is_private = not is_public  # is_publicからis_privateを判定
+                    post_id, channel_id, post_user_id, is_private = row
                     logger.info(f"投稿を検出: post_id={post_id}, channel_id={channel_id}")
                     
                     # 権限チェック
@@ -93,7 +92,7 @@ class Delete(commands.Cog, DatabaseMixin):
                             cursor.execute('''
                                 SELECT COUNT(*) as count 
                                 FROM thoughts 
-                                WHERE user_id = ? AND is_public = 0
+                                WHERE user_id = ? AND is_private = 1
                             ''', (post_user_id,))
                             remaining_posts = cursor.fetchone()['count']
                             
