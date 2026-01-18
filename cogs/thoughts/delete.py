@@ -101,7 +101,7 @@ class Delete(commands.Cog, DatabaseMixin):
                                 try:
                                     private_channel = interaction.guild.get_channel(1278762436569415772)  # 非公開チャンネルID
                                     if private_channel:
-                                        thread_prefix = f"非公開投稿 - {post_user_id}"
+                                        thread_prefix = f"非公開投稿 - {post_user_id} ("
                                         for thread in private_channel.threads:
                                             if thread.name.startswith(thread_prefix):
                                                 # スレッドを完全に削除

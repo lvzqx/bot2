@@ -692,7 +692,7 @@ class Post(commands.Cog):
                         
                         # 公開チャンネルにはキー情報を表示しない
                         await interaction.followup.send(
-                            "✅ 投稿が完了しました！DMに個人キーを送信しました。",
+                            "DMに個人キーを送信しました。",
                             ephemeral=True
                         )
                     else:
