@@ -139,28 +139,17 @@ class DataRecovery(commands.Cog, DatabaseMixin):
                                     print(f"[DEBUG] 投稿ID {post_id}: UIDの解析に失敗しました")
                                     pass
                             
-                            # 方法2: メッセージIDからmessage_referencesを検索
+                            # 方法2: メッセージのembed内容から投稿者を推定
                             if original_user_id is None:
-                                try:
-                                    cursor.execute('''
-                                        SELECT t.user_id 
-                                        FROM thoughts t
-                                        JOIN message_references mr ON t.id = mr.post_id
-                                        WHERE mr.message_id = ?
-                                    ''', (str(message.id),))
-                                    ref_result = cursor.fetchone()
-                                    if ref_result and ref_result[0]:
-                                        original_user_id = ref_result[0]
-                                        print(f"[DEBUG] 投稿ID {post_id}: MessageReferencesからuser_id={original_user_id} を検出")
-                                except Exception as e:
-                                    print(f"[DEBUG] 投稿ID {post_id}: MessageReferences検索エラー: {e}")
-                            
-                            # 方法3: メッセージ内容から投稿者を推定（最終手段）
-                            if original_user_id is None:
-                                # メッセージのembed内容から投稿者を特定できない場合は、
-                                # 復元実行者のIDを使用せずに不明としてマーク
-                                print(f"[DEBUG] 投稿ID {post_id}: 投稿者を特定できません")
-                                original_user_id = 0  # 不明な投稿者としてマーク
+                                # 匿名投稿かどうかで判定
+                                if embed.author and embed.author.name == "匿名ユーザー":
+                                    # 匿名投稿の場合は復元実行者のIDを使用（匿名でも誰かのIDが必要）
+                                    original_user_id = interaction.user.id
+                                    print(f"[DEBUG] 投稿ID {post_id}: 匿名投稿として復元実行者のID={original_user_id} を使用")
+                                else:
+                                    # 非匿名投稿の場合、投稿者を特定できないので不明としてマーク
+                                    print(f"[DEBUG] 投稿ID {post_id}: 非匿名投稿で投稿者を特定できないため不明としてマーク")
+                                    original_user_id = 0  # 不明な投稿者としてマーク
                             
                             # 匿名設定を判定
                             is_anonymous = embed.author.name == "匿名ユーザー"
