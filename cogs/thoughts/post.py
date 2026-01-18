@@ -524,8 +524,6 @@ class Post(commands.Cog):
                     if category:
                         footer_parts.append(f"カテゴリ: {category}")
                     footer_parts.append(f"投稿ID: {post_id}")
-                    # すべての投稿にUIDを含める（復元用）
-                    footer_parts.append(f"UID: {interaction.user.id}")
                     embed.set_footer(text=" | ".join(footer_parts))
                     
                     # メッセージを送信
@@ -626,8 +624,6 @@ class Post(commands.Cog):
                     if category:
                         footer_parts.append(f"カテゴリ: {category}")
                     footer_parts.append(f"投稿ID: {post_id}")
-                    # すべての投稿にUIDを含める（復元用）
-                    footer_parts.append(f"UID: {interaction.user.id}")
                     embed.set_footer(text=" | ".join(footer_parts))
                     
                     sent_message = await thread.send(embed=embed)
