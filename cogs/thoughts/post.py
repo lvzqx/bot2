@@ -613,8 +613,9 @@ class Post(commands.Cog):
                 
             except Exception as e:
                 logger.error(f"投稿中にエラーが発生しました: {e}", exc_info=True)
+                error_message = f"❌ 投稿中にエラーが発生しました。\n詳細: {str(e)}"
                 await interaction.followup.send(
-                    "❌ 投稿中にエラーが発生しました。しばらくしてからもう一度お試しください。",
+                    error_message,
                     ephemeral=True
                 )
 
