@@ -28,8 +28,16 @@ class Delete(commands.Cog, DatabaseMixin):
             # メッセージIDで投稿を検索
             with self._get_db_connection() as conn:
                 with self._get_cursor(conn) as cursor:
+                    # message_referencesテーブルにuser_idカラムがなければ追加
+                    cursor.execute('PRAGMA table_info(message_references)')
+                    columns = [column[1] for column in cursor.fetchall()]
+                    if 'user_id' not in columns:
+                        cursor.execute('ALTER TABLE message_references ADD COLUMN user_id INTEGER NOT NULL DEFAULT 0')
+                        conn.commit()
+                        logger.info("message_referencesテーブルにuser_idカラムを追加しました")
+                    
                     cursor.execute('''
-                        SELECT mr.post_id, mr.channel_id, t.user_id, t.is_private
+                        SELECT mr.post_id, mr.channel_id, COALESCE(mr.user_id, t.user_id) as user_id, t.is_private
                         FROM message_references mr
                         JOIN thoughts t ON mr.post_id = t.id
                         WHERE mr.message_id = ?
