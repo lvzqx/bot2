@@ -33,7 +33,7 @@ class Delete(commands.Cog, DatabaseMixin):
                         FROM message_references mr
                         JOIN thoughts t ON mr.post_id = t.id
                         WHERE mr.message_id = ?
-                    ''', (message_id,))
+                    ''', (str(message_id),))  # 文字列として確実に処理
                     
                     row = cursor.fetchone()
                     if not row:
